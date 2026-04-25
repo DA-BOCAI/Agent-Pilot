@@ -483,13 +483,6 @@ function App() {
           </div>
         </div>
 
-        <section className="meta-grid" aria-label="任务基础信息">
-          <InfoItem label="taskId" value={task?.taskId ?? '-'} />
-          <InfoItem label="requestId" value={task?.requestId ?? '-'} />
-          <InfoItem label="createdAt" value={formatTime(task?.createdAt)} />
-          <InfoItem label="updatedAt" value={formatTime(task?.updatedAt)} />
-        </section>
-
         <section className="progress-strip" aria-label="任务步骤进度">
           {task?.planSteps.length ? (
             task.planSteps.map((step) => (
@@ -729,15 +722,6 @@ function SlidesPreview({ data, fallbackTitle }: { data: SlidePreviewData; fallba
   )
 }
 
-function InfoItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <span>{label}</span>
-      <strong title={value}>{value}</strong>
-    </div>
-  )
-}
-
 function EmptyState({ detail, title }: { detail: string; title: string }) {
   return (
     <div className="empty-state">
@@ -829,17 +813,6 @@ function ActionPanel({
   }
 
   return null
-}
-
-function formatTime(value?: string) {
-  if (!value) return '-'
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(new Date(value))
 }
 
 export default App
