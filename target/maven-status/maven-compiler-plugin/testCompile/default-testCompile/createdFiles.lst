@@ -1,0 +1,3 @@
+com\hay\AgentCopilotApplicationTests.class
+com\hay\agent\service\AgentTaskServiceTest.class
+com\hay\agent\api\TaskControllerTest.class

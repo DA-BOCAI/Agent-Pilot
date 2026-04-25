@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: AgentCopilot
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+server:
+  port: 8080
+
+agent:
+  store:
+    redis:
+      enabled: ${AGENT_REDIS_ENABLED:true}
+
