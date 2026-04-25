@@ -25,7 +25,10 @@ type PlanStep = {
 type Artifact = {
   type: ArtifactType
   title: string
-  url: string
+  url?: string
+  data?: unknown
+  json?: unknown
+  content?: unknown
 }
 
 type TaskEvent = {
@@ -48,6 +51,30 @@ type TaskView = {
   planSteps: PlanStep[]
   artifacts: Artifact[]
   events: TaskEvent[]
+}
+
+type DocumentSection = {
+  title?: string
+  content?: string | string[]
+  text?: string
+  items?: string[]
+}
+
+type DocumentPreviewData = {
+  title?: string
+  summary?: string
+  sections?: DocumentSection[]
+  blocks?: DocumentSection[]
+}
+
+type SlidePreviewData = {
+  title?: string
+  slides?: Array<{
+    title?: string
+    subtitle?: string
+    bullets?: string[]
+    notes?: string
+  }>
 }
 
 const API_BASE = '/api/v1/tasks'
@@ -246,8 +273,33 @@ function mockExecuteTask(task: TaskView): TaskView {
     nextAction: 'none',
     planSteps: deliveredSteps,
     artifacts: [
-      { type: 'doc', title: 'Agent-Pilot 方案文档', url: 'https://example.com/docs/agent-pilot' },
-      { type: 'slides', title: 'Agent-Pilot 管理层汇报演示稿', url: 'https://example.com/slides/agent-pilot' },
+      {
+        type: 'doc',
+        title: 'Agent-Pilot 方案文档',
+        url: 'https://example.com/docs/agent-pilot',
+        data: {
+          title: 'Agent-Pilot 方案文档',
+          summary: '从 IM 对话触发任务，由 Agent 规划、执行、确认并生成文档和演示稿。',
+          sections: [
+            { title: '背景', content: '团队协作需求通常从 IM 讨论开始，需要跨文档和演示稿沉淀为交付物。' },
+            { title: '目标', items: ['捕捉 IM 意图', '生成执行规划', '输出文档与演示稿', '回流交付结果'] },
+            { title: '关键机制', content: ['TaskView 驱动任务详情', 'PlanStep 呈现执行链路', 'Artifact 承载预览数据'] },
+          ],
+        },
+      },
+      {
+        type: 'slides',
+        title: 'Agent-Pilot 管理层汇报演示稿',
+        url: 'https://example.com/slides/agent-pilot',
+        data: {
+          title: 'Agent-Pilot 管理层汇报',
+          slides: [
+            { title: '协作痛点', subtitle: '从 IM 到汇报材料的链路过长', bullets: ['信息分散', '反复复制', '状态不可见'] },
+            { title: 'Agent 工作流', bullets: ['创建任务', '生成规划', '执行步骤', '确认闸门', '交付归档'] },
+            { title: '交付结果', bullets: ['方案文档', '演示稿', 'IM 回流链接'], notes: '强调端到端闭环。' },
+          ],
+        },
+      },
       { type: 'delivery', title: 'IM 群交付卡片', url: 'https://example.com/delivery/agent-pilot' },
     ],
     events: [
@@ -281,12 +333,16 @@ function mockConfirmTask(task: TaskView, approved: boolean): TaskView {
   })
 }
 
+function getArtifactPayload(artifact: Artifact) {
+  return artifact.data ?? artifact.json ?? artifact.content ?? null
+}
+
 function App() {
   const [task, setTask] = useState<TaskView | null>(null)
-  const [inputText, setInputText] = useState('下周三给管理层同步 Agent-Pilot 协作闭环，重点讲从 IM 到演示稿。')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [isMockMode, setIsMockMode] = useState(false)
+  const [activePreviewIndex, setActivePreviewIndex] = useState(0)
 
   const confirmStepCode = task ? getConfirmStepCode(task.nextAction) : null
 
@@ -297,6 +353,8 @@ function App() {
     return running?.code ?? null
   }, [confirmStepCode, task])
 
+  const activeArtifact = task?.artifacts[activePreviewIndex] ?? task?.artifacts[0]
+
   useEffect(() => {
     const taskId = localStorage.getItem(TASK_ID_STORAGE_KEY)
     if (!taskId) return
@@ -305,14 +363,14 @@ function App() {
       try {
         const restoredTask = await getTask(taskId)
         setTask(restoredTask)
-        setInputText(restoredTask.inputText)
+        setActivePreviewIndex(0)
         setIsMockMode(false)
       } catch {
         const mockTask = localStorage.getItem(MOCK_TASK_STORAGE_KEY)
         if (!mockTask) return
         const parsedTask = JSON.parse(mockTask) as TaskView
         setTask(parsedTask)
-        setInputText(parsedTask.inputText)
+        setActivePreviewIndex(0)
         setIsMockMode(true)
       }
     })
@@ -332,18 +390,19 @@ function App() {
 
   function applyTask(nextTask: TaskView, mockMode = isMockMode) {
     setTask(nextTask)
-    setInputText(nextTask.inputText)
+    setActivePreviewIndex(0)
     setIsMockMode(mockMode)
     persistTask(nextTask)
   }
 
   async function handleCreateTask() {
     await runAction(async () => {
+      const feishuMessage = '下周三给管理层同步 Agent-Pilot 协作闭环，重点讲从 IM 到演示稿。'
       try {
-        const createdTask = await createTask(inputText)
+        const createdTask = await createTask(feishuMessage)
         applyTask(createdTask, false)
       } catch {
-        applyTask(createMockTask(inputText), true)
+        applyTask(createMockTask(feishuMessage), true)
       }
     })
   }
@@ -387,7 +446,7 @@ function App() {
       try {
         const refreshedTask = await getTask(task.taskId)
         setTask(refreshedTask)
-        setInputText(refreshedTask.inputText)
+        setActivePreviewIndex(0)
         persistTask(refreshedTask)
         setIsMockMode(false)
       } catch {
@@ -395,7 +454,7 @@ function App() {
         if (!mockTask) return
         const parsedTask = JSON.parse(mockTask) as TaskView
         setTask(parsedTask)
-        setInputText(parsedTask.inputText)
+        setActivePreviewIndex(0)
         setIsMockMode(true)
       }
     })
@@ -404,13 +463,14 @@ function App() {
   function handleReset() {
     clearPersistedTask()
     setTask(null)
+    setActivePreviewIndex(0)
     setError('')
     setIsMockMode(false)
   }
 
   return (
     <main className="app-shell">
-      <header className="topbar">
+      <header className="topbar reveal">
         <div className="task-kicker">TaskController 驱动 · {isMockMode ? 'Mock 演示模式' : 'API 模式'}</div>
         <div className="task-header">
           <div>
@@ -418,7 +478,7 @@ function App() {
             <p>
               {task
                 ? `${task.source} · ${task.userId} · ${statusLabels[task.status]} · ${getNextActionText(task.nextAction)}`
-                : '输入 IM 消息内容后创建任务，后续页面完全由 TaskView 和 TaskEvent 渲染。'}
+                : '任务由飞书聊天内容触发，页面用于展示进度、确认步骤和预览结果。'}
             </p>
           </div>
         </div>
@@ -445,7 +505,7 @@ function App() {
               </div>
             ))
           ) : (
-            <div className="empty-progress">任务已创建后将在这里展示规划步骤；当前等待生成规划。</div>
+            <div className="empty-progress">任务创建后将在这里展示规划步骤。当前等待生成规划。</div>
           )}
         </section>
 
@@ -461,7 +521,7 @@ function App() {
       </header>
 
       <section className="workspace-grid">
-        <section className="main-panel" aria-labelledby="workspace-title">
+        <section className="main-panel reveal" aria-labelledby="workspace-title">
           <div className="panel-heading">
             <div>
               <span>{task ? statusLabels[task.status] : '未创建'}</span>
@@ -471,20 +531,17 @@ function App() {
           </div>
 
           <section className="content-grid">
-            <article className="surface input-card">
-              <h3>任务输入</h3>
-              {task ? (
-                <p>{task.inputText}</p>
-              ) : (
-                <label className="command-box compact">
-                  <span>自然语言输入</span>
-                  <textarea value={inputText} onChange={(event) => setInputText(event.target.value)} />
-                </label>
-              )}
+            <article className="surface context-card">
+              <h3>飞书上下文</h3>
+              <p>{task?.inputText || '任务尚未创建。创建后将展示从飞书聊天 API 获取的原始需求摘要。'}</p>
               <dl>
                 <div>
                   <dt>来源</dt>
                   <dd>{task?.source ?? 'im_text'}</dd>
+                </div>
+                <div>
+                  <dt>发起人</dt>
+                  <dd>{task?.userId ?? '等待飞书回调'}</dd>
                 </div>
                 <div>
                   <dt>当前状态</dt>
@@ -499,7 +556,7 @@ function App() {
 
             <article className="surface action-card">
               <h3>当前动作</h3>
-              <p>{task ? getNextActionText(task.nextAction) : '输入 IM 消息内容并创建任务。'}</p>
+              <p>{task ? getNextActionText(task.nextAction) : '等待飞书消息卡片触发任务，或使用演示按钮创建模拟任务。'}</p>
               {error ? <div className="error-banner">{error}</div> : null}
               <ActionPanel
                 disabled={isLoading}
@@ -531,25 +588,144 @@ function App() {
             </article>
 
             <article className="surface artifact-card">
-              <h3>{task?.status === 'DELIVERED' ? '交付完成' : '产物区'}</h3>
+              <h3>{task?.status === 'DELIVERED' ? '交付预览' : '预览'}</h3>
               {task?.artifacts.length ? (
-                <div className="artifact-list">
-                  {task.artifacts.map((artifact) => (
-                    <a href={artifact.url} key={`${artifact.type}-${artifact.url}`} target="_blank">
-                      <span>{artifactLabels[artifact.type]}</span>
-                      <strong>{artifact.title}</strong>
-                      <small>{artifact.url}</small>
-                    </a>
-                  ))}
+                <div className="preview-layout">
+                  <div className="preview-tabs" aria-label="预览类型">
+                    {task.artifacts.map((artifact, index) => (
+                      <button
+                        className={artifact === activeArtifact ? 'is-selected' : ''}
+                        key={`${artifact.type}-${artifact.title}-${index}`}
+                        onClick={() => setActivePreviewIndex(index)}
+                        type="button"
+                      >
+                        <span>{artifactLabels[artifact.type]}</span>
+                        <strong>{artifact.title}</strong>
+                      </button>
+                    ))}
+                  </div>
+                  {activeArtifact ? <ArtifactPreview artifact={activeArtifact} /> : null}
                 </div>
               ) : (
-                <EmptyState title="暂无产物" detail="执行完成后将在这里展示文档、演示稿和交付链接。" />
+                <EmptyState title="暂无预览" detail="执行完成后将在这里预览文档 JSON、PPT JSON 或交付链接。" />
               )}
             </article>
           </section>
         </section>
       </section>
     </main>
+  )
+}
+
+function ArtifactPreview({ artifact }: { artifact: Artifact }) {
+  const payload = getArtifactPayload(artifact)
+
+  if (artifact.type === 'doc' && payload && typeof payload === 'object') {
+    return <DocumentPreview data={payload as DocumentPreviewData} fallbackTitle={artifact.title} />
+  }
+
+  if (artifact.type === 'slides' && payload && typeof payload === 'object') {
+    return <SlidesPreview data={payload as SlidePreviewData} fallbackTitle={artifact.title} />
+  }
+
+  return (
+    <div className="preview-empty">
+      <span>{artifactLabels[artifact.type]}</span>
+      <h4>{artifact.title}</h4>
+      {artifact.url ? (
+        <a href={artifact.url} target="_blank">
+          打开链接
+        </a>
+      ) : (
+        <p>后端尚未返回可预览的 JSON 数据。</p>
+      )}
+    </div>
+  )
+}
+
+function DocumentPreview({ data, fallbackTitle }: { data: DocumentPreviewData; fallbackTitle: string }) {
+  const sections = data.sections ?? data.blocks ?? []
+
+  return (
+    <div className="doc-preview">
+      <header>
+        <span>Document Preview</span>
+        <h4>{data.title ?? fallbackTitle}</h4>
+        {data.summary ? <p>{data.summary}</p> : null}
+      </header>
+      {sections.length ? (
+        <div className="doc-section-list">
+          {sections.map((section, index) => (
+            <section key={`${section.title ?? 'section'}-${index}`}>
+              <h5>{section.title ?? `段落 ${index + 1}`}</h5>
+              <PreviewContent section={section} />
+            </section>
+          ))}
+        </div>
+      ) : (
+        <pre>{JSON.stringify(data, null, 2)}</pre>
+      )}
+    </div>
+  )
+}
+
+function PreviewContent({ section }: { section: DocumentSection }) {
+  const content = section.content ?? section.text
+
+  if (Array.isArray(section.items)) {
+    return (
+      <ul>
+        {section.items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    )
+  }
+
+  if (Array.isArray(content)) {
+    return (
+      <ul>
+        {content.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    )
+  }
+
+  return <p>{content ?? '暂无内容'}</p>
+}
+
+function SlidesPreview({ data, fallbackTitle }: { data: SlidePreviewData; fallbackTitle: string }) {
+  const slides = data.slides ?? []
+
+  return (
+    <div className="slides-preview">
+      <header>
+        <span>Slides Preview</span>
+        <h4>{data.title ?? fallbackTitle}</h4>
+      </header>
+      {slides.length ? (
+        <div className="slide-grid">
+          {slides.map((slide, index) => (
+            <article className="slide-card" key={`${slide.title ?? 'slide'}-${index}`}>
+              <span>{String(index + 1).padStart(2, '0')}</span>
+              <h5>{slide.title ?? `Slide ${index + 1}`}</h5>
+              {slide.subtitle ? <p>{slide.subtitle}</p> : null}
+              {slide.bullets?.length ? (
+                <ul>
+                  {slide.bullets.map((bullet) => (
+                    <li key={bullet}>{bullet}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {slide.notes ? <small>{slide.notes}</small> : null}
+            </article>
+          ))}
+        </div>
+      ) : (
+        <pre>{JSON.stringify(data, null, 2)}</pre>
+      )}
+    </div>
   )
 }
 
@@ -592,7 +768,7 @@ function ActionPanel({
     return (
       <div className="action-stack">
         <button className="primary" disabled={disabled} onClick={onCreate}>
-          创建任务
+          创建模拟任务
         </button>
       </div>
     )
@@ -635,7 +811,7 @@ function ActionPanel({
     return (
       <div className="action-stack">
         <button className="primary" disabled={disabled}>
-          查看产物
+          查看预览
         </button>
         <button disabled={disabled}>返回 IM</button>
       </div>
