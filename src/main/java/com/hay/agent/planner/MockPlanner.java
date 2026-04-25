@@ -2,6 +2,7 @@ package com.hay.agent.planner;
 
 import com.hay.agent.domain.PlanStep;
 import com.hay.agent.domain.StepStatus;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.List;
  */
 
 @Component
+@ConditionalOnProperty(name = "agent.planner.mode", havingValue = "mock")
 public class MockPlanner implements Planner {
 
     @Override

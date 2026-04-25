@@ -5,6 +5,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+import java.util.Map;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -14,6 +17,9 @@ public class PlanStep {
     private String scene;
     private String action;
     private String tool;
+    private String description;
+    private Map<String, Object> arguments;
+    private List<String> dependsOn;
     private boolean requiresConfirm;
     private StepStatus status;
 }

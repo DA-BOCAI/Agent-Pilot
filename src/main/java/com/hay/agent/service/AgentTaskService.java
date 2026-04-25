@@ -3,12 +3,14 @@ package com.hay.agent.service;
 import com.hay.agent.api.dto.ConfirmTaskRequest;
 import com.hay.agent.api.dto.CreateTaskRequest;
 import com.hay.agent.domain.AgentTask;
+import com.hay.agent.domain.Artifact;
 import com.hay.agent.domain.PlanStep;
 import com.hay.agent.domain.StepStatus;
 import com.hay.agent.domain.TaskEvent;
 import com.hay.agent.domain.TaskStatus;
 import com.hay.agent.planner.Planner;
 import com.hay.agent.store.TaskStore;
+import com.hay.agent.tool.FeishuToolExecutor;
 import com.hay.agent.tool.ToolExecutor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -17,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -137,8 +140,20 @@ public class AgentTaskService {
 
             step.setStatus(StepStatus.RUNNING);
             addEvent(task, "STEP_RUNNING", "Executing step", Map.of("stepId", step.getStepId(), "tool", step.getTool()));
-            // 控制类步骤可能不产出实体结果，因此工具执行返回值允许为空。
-            toolExecutor.execute(step, task.getTaskId(), task.getInputText()).ifPresent(task.getArtifacts()::add);
+            try {
+                // 控制类步骤可能不产出实体结果，因此工具执行返回值允许为空。
+                executeTool(task, step).ifPresent(task.getArtifacts()::add);
+            } catch (RuntimeException ex) {
+                step.setStatus(StepStatus.FAILED);
+                task.setStatus(TaskStatus.FAILED);
+                task.setNextAction("none");
+                addEvent(task, "STEP_FAILED", "Step execution failed", Map.of(
+                        "stepId", step.getStepId(),
+                        "tool", step.getTool(),
+                        "error", ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage()
+                ));
+                return save(task);
+            }
             step.setStatus(StepStatus.DONE);
             addEvent(task, "STEP_DONE", "Step completed", Map.of("stepId", step.getStepId()));
         }
@@ -161,6 +176,13 @@ public class AgentTaskService {
     private AgentTask save(AgentTask task) {
         task.setUpdatedAt(Instant.now());
         return taskStore.save(task);
+    }
+
+    private Optional<Artifact> executeTool(AgentTask task, PlanStep step) {
+        if (toolExecutor instanceof FeishuToolExecutor feishuToolExecutor) {
+            return feishuToolExecutor.execute(step, task.getTaskId(), task.getInputText(), task.getArtifacts());
+        }
+        return toolExecutor.execute(step, task.getTaskId(), task.getInputText());
     }
 
     private void addEvent(AgentTask task, String type, String message, Map<String, String> metadata) {

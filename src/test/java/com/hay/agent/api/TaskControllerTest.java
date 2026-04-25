@@ -14,7 +14,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "agent.planner.mode=mock",
+        "agent.tool.mode=mock",
+        "agent.store.redis.enabled=false"
+})
 @AutoConfigureMockMvc
 class TaskControllerTest {
 

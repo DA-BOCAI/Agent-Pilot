@@ -11,7 +11,21 @@ server:
   port: 8080
 
 agent:
+  planner:
+    mode: ${AGENT_PLANNER_MODE:doubao}
+  tool:
+    mode: ${AGENT_TOOL_MODE:feishu}
+  llm:
+    provider: volcengine
+    base-url: ${DOUBAO_BASE_URL:https://ark.cn-beijing.volces.com/api/v3}
+    api-key: ${DOUBAO_API_KEY:}
+    model: ${DOUBAO_MODEL:doubao-seed-2.0-pro}
+    temperature: ${DOUBAO_TEMPERATURE:0.2}
+    timeout-seconds: ${DOUBAO_TIMEOUT_SECONDS:30}
+  feishu:
+    base-url: ${FEISHU_BASE_URL:https://open.feishu.cn}
+    app-id: ${FEISHU_APP_ID:}
+    app-secret: ${FEISHU_APP_SECRET:}
   store:
     redis:
       enabled: ${AGENT_REDIS_ENABLED:true}
-

@@ -2,6 +2,7 @@ package com.hay.agent.tool;
 
 import com.hay.agent.domain.Artifact;
 import com.hay.agent.domain.PlanStep;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
@@ -12,6 +13,7 @@ import java.util.Optional;
  */
 
 @Component
+@ConditionalOnProperty(name = "agent.tool.mode", havingValue = "mock")
 public class MockToolExecutor implements ToolExecutor {
 
     @Override
