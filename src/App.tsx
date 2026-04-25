@@ -1,0 +1,669 @@
+import { useEffect, useMemo, useState } from 'react'
+import './App.css'
+
+type TaskStatus = 'CREATED' | 'PLANNED' | 'WAIT_CONFIRM' | 'DELIVERED' | 'FAILED'
+type StepCode = 'A_CAPTURE' | 'B_PLAN' | 'C_DOC' | 'D_SLIDES' | 'F_DELIVER'
+type StepStatus = 'PENDING' | 'RUNNING' | 'WAIT_CONFIRM' | 'APPROVED' | 'SKIPPED' | 'DONE'
+type ArtifactType = 'doc' | 'slides' | 'delivery'
+type EventType =
+  | 'TASK_CREATED'
+  | 'TASK_PLANNED'
+  | 'STEP_WAIT_CONFIRM'
+  | 'STEP_RUNNING'
+  | 'STEP_DONE'
+  | 'STEP_APPROVED'
+  | 'STEP_REJECTED'
+  | 'TASK_DELIVERED'
+
+type PlanStep = {
+  code: StepCode
+  name: string
+  status: StepStatus
+  requiresConfirm: boolean
+}
+
+type Artifact = {
+  type: ArtifactType
+  title: string
+  url: string
+}
+
+type TaskEvent = {
+  type: EventType
+  message: string
+  createdAt: string
+  stepCode?: StepCode
+}
+
+type TaskView = {
+  taskId: string
+  requestId: string
+  source: string
+  userId: string
+  inputText: string
+  status: TaskStatus
+  nextAction: string
+  createdAt: string
+  updatedAt: string
+  planSteps: PlanStep[]
+  artifacts: Artifact[]
+  events: TaskEvent[]
+}
+
+const API_BASE = '/api/v1/tasks'
+const TASK_ID_STORAGE_KEY = 'agent-pilot-task-id'
+const MOCK_TASK_STORAGE_KEY = 'agent-pilot-mock-task'
+
+const stepLabels: Record<StepCode, string> = {
+  A_CAPTURE: '需求捕捉',
+  B_PLAN: '任务规划',
+  C_DOC: '文档生成',
+  D_SLIDES: '演示稿生成',
+  F_DELIVER: '交付归档',
+}
+
+const statusLabels: Record<TaskStatus, string> = {
+  CREATED: '任务已创建',
+  PLANNED: '规划已生成',
+  WAIT_CONFIRM: '等待用户确认',
+  DELIVERED: '交付完成',
+  FAILED: '任务已终止',
+}
+
+const stepStatusLabels: Record<StepStatus, string> = {
+  PENDING: '未开始',
+  RUNNING: '运行中',
+  WAIT_CONFIRM: '等待确认',
+  APPROVED: '已通过',
+  SKIPPED: '已跳过',
+  DONE: '已完成',
+}
+
+const artifactLabels: Record<ArtifactType, string> = {
+  doc: '文档',
+  slides: '演示稿',
+  delivery: '交付链接',
+}
+
+function createEvent(type: EventType, message?: string, stepCode?: StepCode): TaskEvent {
+  return {
+    type,
+    message: message ?? type,
+    createdAt: new Date().toISOString(),
+    stepCode,
+  }
+}
+
+function createPlanSteps(): PlanStep[] {
+  return [
+    { code: 'A_CAPTURE', name: stepLabels.A_CAPTURE, status: 'DONE', requiresConfirm: false },
+    { code: 'B_PLAN', name: stepLabels.B_PLAN, status: 'DONE', requiresConfirm: false },
+    { code: 'C_DOC', name: stepLabels.C_DOC, status: 'PENDING', requiresConfirm: true },
+    { code: 'D_SLIDES', name: stepLabels.D_SLIDES, status: 'PENDING', requiresConfirm: false },
+    { code: 'F_DELIVER', name: stepLabels.F_DELIVER, status: 'PENDING', requiresConfirm: false },
+  ]
+}
+
+function getNextActionText(nextAction: string) {
+  if (nextAction === 'plan') return '下一步：生成规划'
+  if (nextAction === 'execute') return '下一步：执行任务'
+  if (nextAction === 'none') return '无后续动作'
+  if (nextAction.startsWith('confirm:')) {
+    const code = nextAction.replace('confirm:', '') as StepCode
+    return `下一步：确认${stepLabels[code] ?? code}步骤`
+  }
+  return `下一步：${nextAction}`
+}
+
+function getConfirmStepCode(nextAction: string): StepCode | null {
+  if (!nextAction.startsWith('confirm:')) return null
+  return nextAction.replace('confirm:', '') as StepCode
+}
+
+function createMockTask(inputText: string): TaskView {
+  const now = new Date().toISOString()
+  return {
+    taskId: `task_${Date.now()}`,
+    requestId: `req_${crypto.randomUUID()}`,
+    source: 'im_text',
+    userId: 'user_zhouan',
+    inputText,
+    status: 'CREATED',
+    nextAction: 'plan',
+    createdAt: now,
+    updatedAt: now,
+    planSteps: [],
+    artifacts: [],
+    events: [createEvent('TASK_CREATED')],
+  }
+}
+
+function updateTask(task: TaskView, changes: Partial<TaskView>): TaskView {
+  return {
+    ...task,
+    ...changes,
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+function persistTask(task: TaskView) {
+  localStorage.setItem(TASK_ID_STORAGE_KEY, task.taskId)
+  localStorage.setItem(MOCK_TASK_STORAGE_KEY, JSON.stringify(task))
+}
+
+function clearPersistedTask() {
+  localStorage.removeItem(TASK_ID_STORAGE_KEY)
+  localStorage.removeItem(MOCK_TASK_STORAGE_KEY)
+}
+
+async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...init?.headers,
+    },
+    ...init,
+  })
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`)
+  }
+
+  const contentType = response.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json')) {
+    throw new Error('Response is not JSON')
+  }
+
+  return response.json() as Promise<T>
+}
+
+async function createTask(inputText: string): Promise<TaskView> {
+  return requestJson<TaskView>(API_BASE, {
+    method: 'POST',
+    body: JSON.stringify({
+      requestId: `req_${crypto.randomUUID()}`,
+      source: 'im_text',
+      userId: 'user_zhouan',
+      inputText,
+    }),
+  })
+}
+
+async function planTask(taskId: string): Promise<TaskView> {
+  return requestJson<TaskView>(`${API_BASE}/${taskId}/plan`, { method: 'POST' })
+}
+
+async function executeTask(taskId: string): Promise<TaskView> {
+  return requestJson<TaskView>(`${API_BASE}/${taskId}/execute`, { method: 'POST' })
+}
+
+async function confirmTask(taskId: string, approved: boolean, stepCode?: StepCode): Promise<TaskView> {
+  return requestJson<TaskView>(`${API_BASE}/${taskId}/confirm`, {
+    method: 'POST',
+    body: JSON.stringify({ approved, stepCode }),
+  })
+}
+
+async function getTask(taskId: string): Promise<TaskView> {
+  return requestJson<TaskView>(`${API_BASE}/${taskId}`)
+}
+
+function mockPlanTask(task: TaskView): TaskView {
+  return updateTask(task, {
+    status: 'PLANNED',
+    nextAction: 'execute',
+    planSteps: createPlanSteps(),
+    events: [...task.events, createEvent('TASK_PLANNED')],
+  })
+}
+
+function mockExecuteTask(task: TaskView): TaskView {
+  const currentSteps = task.planSteps.length > 0 ? task.planSteps : createPlanSteps()
+
+  if (task.status === 'PLANNED' && currentSteps.some((step) => step.code === 'C_DOC' && step.status === 'PENDING')) {
+    return updateTask(task, {
+      status: 'WAIT_CONFIRM',
+      nextAction: 'confirm:C_DOC',
+      planSteps: currentSteps.map((step) => (step.code === 'C_DOC' ? { ...step, status: 'WAIT_CONFIRM' } : step)),
+      events: [
+        ...task.events,
+        createEvent('STEP_RUNNING', '文档生成步骤执行中', 'C_DOC'),
+        createEvent('STEP_WAIT_CONFIRM', '文档生成步骤等待用户确认', 'C_DOC'),
+      ],
+    })
+  }
+
+  const deliveredSteps = currentSteps.map((step) =>
+    step.status === 'PENDING' || step.status === 'RUNNING'
+      ? { ...step, status: 'DONE' as StepStatus }
+      : step.code === 'C_DOC' && step.status === 'APPROVED'
+        ? { ...step, status: 'DONE' as StepStatus }
+        : step,
+  )
+
+  return updateTask(task, {
+    status: 'DELIVERED',
+    nextAction: 'none',
+    planSteps: deliveredSteps,
+    artifacts: [
+      { type: 'doc', title: 'Agent-Pilot 方案文档', url: 'https://example.com/docs/agent-pilot' },
+      { type: 'slides', title: 'Agent-Pilot 管理层汇报演示稿', url: 'https://example.com/slides/agent-pilot' },
+      { type: 'delivery', title: 'IM 群交付卡片', url: 'https://example.com/delivery/agent-pilot' },
+    ],
+    events: [
+      ...task.events,
+      createEvent('STEP_RUNNING', '演示稿生成与交付步骤执行中', 'D_SLIDES'),
+      createEvent('STEP_DONE', '演示稿生成步骤已完成', 'D_SLIDES'),
+      createEvent('STEP_DONE', '交付归档步骤已完成', 'F_DELIVER'),
+      createEvent('TASK_DELIVERED'),
+    ],
+  })
+}
+
+function mockConfirmTask(task: TaskView, approved: boolean): TaskView {
+  const stepCode = getConfirmStepCode(task.nextAction)
+  if (!stepCode) return task
+
+  if (!approved) {
+    return updateTask(task, {
+      status: 'FAILED',
+      nextAction: 'none',
+      planSteps: task.planSteps.map((step) => (step.code === stepCode ? { ...step, status: 'SKIPPED' } : step)),
+      events: [...task.events, createEvent('STEP_REJECTED', `${stepLabels[stepCode]}步骤已拒绝`, stepCode)],
+    })
+  }
+
+  return updateTask(task, {
+    status: 'PLANNED',
+    nextAction: 'execute',
+    planSteps: task.planSteps.map((step) => (step.code === stepCode ? { ...step, status: 'APPROVED' } : step)),
+    events: [...task.events, createEvent('STEP_APPROVED', `${stepLabels[stepCode]}步骤已通过`, stepCode)],
+  })
+}
+
+function App() {
+  const [task, setTask] = useState<TaskView | null>(null)
+  const [inputText, setInputText] = useState('下周三给管理层同步 Agent-Pilot 协作闭环，重点讲从 IM 到演示稿。')
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [isMockMode, setIsMockMode] = useState(false)
+
+  const confirmStepCode = task ? getConfirmStepCode(task.nextAction) : null
+
+  const activeStepCode = useMemo(() => {
+    if (!task) return null
+    if (confirmStepCode) return confirmStepCode
+    const running = task.planSteps.find((step) => step.status === 'RUNNING' || step.status === 'WAIT_CONFIRM')
+    return running?.code ?? null
+  }, [confirmStepCode, task])
+
+  useEffect(() => {
+    const taskId = localStorage.getItem(TASK_ID_STORAGE_KEY)
+    if (!taskId) return
+
+    void runAction(async () => {
+      try {
+        const restoredTask = await getTask(taskId)
+        setTask(restoredTask)
+        setInputText(restoredTask.inputText)
+        setIsMockMode(false)
+      } catch {
+        const mockTask = localStorage.getItem(MOCK_TASK_STORAGE_KEY)
+        if (!mockTask) return
+        const parsedTask = JSON.parse(mockTask) as TaskView
+        setTask(parsedTask)
+        setInputText(parsedTask.inputText)
+        setIsMockMode(true)
+      }
+    })
+  }, [])
+
+  async function runAction(action: () => Promise<void>) {
+    setIsLoading(true)
+    setError('')
+    try {
+      await action()
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : '操作失败')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  function applyTask(nextTask: TaskView, mockMode = isMockMode) {
+    setTask(nextTask)
+    setInputText(nextTask.inputText)
+    setIsMockMode(mockMode)
+    persistTask(nextTask)
+  }
+
+  async function handleCreateTask() {
+    await runAction(async () => {
+      try {
+        const createdTask = await createTask(inputText)
+        applyTask(createdTask, false)
+      } catch {
+        applyTask(createMockTask(inputText), true)
+      }
+    })
+  }
+
+  async function handlePlanTask() {
+    if (!task) return
+    await runAction(async () => {
+      try {
+        applyTask(await planTask(task.taskId), false)
+      } catch {
+        applyTask(mockPlanTask(task), true)
+      }
+    })
+  }
+
+  async function handleExecuteTask() {
+    if (!task) return
+    await runAction(async () => {
+      try {
+        applyTask(await executeTask(task.taskId), false)
+      } catch {
+        applyTask(mockExecuteTask(task), true)
+      }
+    })
+  }
+
+  async function handleConfirm(approved: boolean) {
+    if (!task) return
+    await runAction(async () => {
+      try {
+        applyTask(await confirmTask(task.taskId, approved, confirmStepCode ?? undefined), false)
+      } catch {
+        applyTask(mockConfirmTask(task, approved), true)
+      }
+    })
+  }
+
+  async function handleRefresh() {
+    if (!task) return
+    await runAction(async () => {
+      try {
+        const refreshedTask = await getTask(task.taskId)
+        setTask(refreshedTask)
+        setInputText(refreshedTask.inputText)
+        persistTask(refreshedTask)
+        setIsMockMode(false)
+      } catch {
+        const mockTask = localStorage.getItem(MOCK_TASK_STORAGE_KEY)
+        if (!mockTask) return
+        const parsedTask = JSON.parse(mockTask) as TaskView
+        setTask(parsedTask)
+        setInputText(parsedTask.inputText)
+        setIsMockMode(true)
+      }
+    })
+  }
+
+  function handleReset() {
+    clearPersistedTask()
+    setTask(null)
+    setError('')
+    setIsMockMode(false)
+  }
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <div className="task-kicker">TaskController 驱动 · {isMockMode ? 'Mock 演示模式' : 'API 模式'}</div>
+        <div className="task-header">
+          <div>
+            <h1>{task?.inputText || '创建一个 IM 来源任务'}</h1>
+            <p>
+              {task
+                ? `${task.source} · ${task.userId} · ${statusLabels[task.status]} · ${getNextActionText(task.nextAction)}`
+                : '输入 IM 消息内容后创建任务，后续页面完全由 TaskView 和 TaskEvent 渲染。'}
+            </p>
+          </div>
+        </div>
+
+        <section className="meta-grid" aria-label="任务基础信息">
+          <InfoItem label="taskId" value={task?.taskId ?? '-'} />
+          <InfoItem label="requestId" value={task?.requestId ?? '-'} />
+          <InfoItem label="createdAt" value={formatTime(task?.createdAt)} />
+          <InfoItem label="updatedAt" value={formatTime(task?.updatedAt)} />
+        </section>
+
+        <section className="progress-strip" aria-label="任务步骤进度">
+          {task?.planSteps.length ? (
+            task.planSteps.map((step) => (
+              <div
+                className={`progress-step ${step.status === 'DONE' || step.status === 'APPROVED' ? 'is-done' : ''} ${
+                  step.code === activeStepCode ? 'is-active' : ''
+                }`}
+                key={step.code}
+              >
+                <span>{step.code.split('_')[0]}</span>
+                <strong>{step.name}</strong>
+                <small>{stepStatusLabels[step.status]}</small>
+              </div>
+            ))
+          ) : (
+            <div className="empty-progress">任务已创建后将在这里展示规划步骤；当前等待生成规划。</div>
+          )}
+        </section>
+
+        <div className="top-actions" aria-label="辅助操作">
+          <button onClick={handleRefresh} disabled={!task || isLoading}>
+            刷新任务
+          </button>
+          <button onClick={handleReset} disabled={isLoading}>
+            新建任务
+          </button>
+          <button disabled={!task}>返回 IM</button>
+        </div>
+      </header>
+
+      <section className="workspace-grid">
+        <section className="main-panel" aria-labelledby="workspace-title">
+          <div className="panel-heading">
+            <div>
+              <span>{task ? statusLabels[task.status] : '未创建'}</span>
+              <h2 id="workspace-title">任务详情</h2>
+            </div>
+            {task ? <strong className={`status-pill status-${task.status.toLowerCase()}`}>{task.status}</strong> : null}
+          </div>
+
+          <section className="content-grid">
+            <article className="surface input-card">
+              <h3>任务输入</h3>
+              {task ? (
+                <p>{task.inputText}</p>
+              ) : (
+                <label className="command-box compact">
+                  <span>自然语言输入</span>
+                  <textarea value={inputText} onChange={(event) => setInputText(event.target.value)} />
+                </label>
+              )}
+              <dl>
+                <div>
+                  <dt>来源</dt>
+                  <dd>{task?.source ?? 'im_text'}</dd>
+                </div>
+                <div>
+                  <dt>当前状态</dt>
+                  <dd>{task ? statusLabels[task.status] : '等待创建任务'}</dd>
+                </div>
+                <div>
+                  <dt>下一步</dt>
+                  <dd>{task ? getNextActionText(task.nextAction) : '下一步：创建任务'}</dd>
+                </div>
+              </dl>
+            </article>
+
+            <article className="surface action-card">
+              <h3>当前动作</h3>
+              <p>{task ? getNextActionText(task.nextAction) : '输入 IM 消息内容并创建任务。'}</p>
+              {error ? <div className="error-banner">{error}</div> : null}
+              <ActionPanel
+                disabled={isLoading}
+                onConfirm={handleConfirm}
+                onCreate={handleCreateTask}
+                onExecute={handleExecuteTask}
+                onPlan={handlePlanTask}
+                onReset={handleReset}
+                task={task}
+              />
+            </article>
+
+            <article className="surface steps-card">
+              <h3>任务步骤时间线</h3>
+              {task?.planSteps.length ? (
+                <div className="step-list">
+                  {task.planSteps.map((step) => (
+                    <div className={`step-row ${step.code === activeStepCode ? 'is-active' : ''}`} key={step.code}>
+                      <span>{step.code}</span>
+                      <strong>{step.name}</strong>
+                      <em>{stepStatusLabels[step.status]}</em>
+                      <small>{step.requiresConfirm ? '需要确认' : '自动执行'}</small>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState title="暂无规划步骤" detail="调用生成规划接口后会展示 A_CAPTURE 到 F_DELIVER 的步骤树。" />
+              )}
+            </article>
+
+            <article className="surface artifact-card">
+              <h3>{task?.status === 'DELIVERED' ? '交付完成' : '产物区'}</h3>
+              {task?.artifacts.length ? (
+                <div className="artifact-list">
+                  {task.artifacts.map((artifact) => (
+                    <a href={artifact.url} key={`${artifact.type}-${artifact.url}`} target="_blank">
+                      <span>{artifactLabels[artifact.type]}</span>
+                      <strong>{artifact.title}</strong>
+                      <small>{artifact.url}</small>
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState title="暂无产物" detail="执行完成后将在这里展示文档、演示稿和交付链接。" />
+              )}
+            </article>
+          </section>
+        </section>
+      </section>
+    </main>
+  )
+}
+
+function InfoItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span>{label}</span>
+      <strong title={value}>{value}</strong>
+    </div>
+  )
+}
+
+function EmptyState({ detail, title }: { detail: string; title: string }) {
+  return (
+    <div className="empty-state">
+      <strong>{title}</strong>
+      <p>{detail}</p>
+    </div>
+  )
+}
+
+function ActionPanel({
+  disabled,
+  onConfirm,
+  onCreate,
+  onExecute,
+  onPlan,
+  onReset,
+  task,
+}: {
+  disabled: boolean
+  onConfirm: (approved: boolean) => void
+  onCreate: () => void
+  onExecute: () => void
+  onPlan: () => void
+  onReset: () => void
+  task: TaskView | null
+}) {
+  if (!task) {
+    return (
+      <div className="action-stack">
+        <button className="primary" disabled={disabled} onClick={onCreate}>
+          创建任务
+        </button>
+      </div>
+    )
+  }
+
+  if (task.status === 'CREATED' && task.nextAction === 'plan') {
+    return (
+      <div className="action-stack">
+        <button className="primary" disabled={disabled} onClick={onPlan}>
+          生成规划
+        </button>
+      </div>
+    )
+  }
+
+  if (task.status === 'PLANNED' && task.nextAction === 'execute') {
+    return (
+      <div className="action-stack">
+        <button className="primary" disabled={disabled} onClick={onExecute}>
+          执行任务
+        </button>
+      </div>
+    )
+  }
+
+  if (task.status === 'WAIT_CONFIRM' && task.nextAction.startsWith('confirm:')) {
+    return (
+      <div className="action-stack split">
+        <button className="primary" disabled={disabled} onClick={() => onConfirm(true)}>
+          通过
+        </button>
+        <button disabled={disabled} onClick={() => onConfirm(false)}>
+          拒绝
+        </button>
+      </div>
+    )
+  }
+
+  if (task.status === 'DELIVERED') {
+    return (
+      <div className="action-stack">
+        <button className="primary" disabled={disabled}>
+          查看产物
+        </button>
+        <button disabled={disabled}>返回 IM</button>
+      </div>
+    )
+  }
+
+  if (task.status === 'FAILED') {
+    return (
+      <div className="action-stack">
+        <button className="primary" disabled={disabled} onClick={onReset}>
+          重新创建
+        </button>
+      </div>
+    )
+  }
+
+  return null
+}
+
+function formatTime(value?: string) {
+  if (!value) return '-'
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(new Date(value))
+}
+
+export default App
