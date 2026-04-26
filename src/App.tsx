@@ -471,13 +471,13 @@ function App() {
   return (
     <main className="app-shell">
       <header className="topbar reveal">
-        <div className="task-kicker">TaskController 驱动 · {isMockMode ? 'Mock 演示模式' : 'API 模式'}</div>
+        <div className="task-kicker">{isMockMode ? '演示模式' : 'API 模式'}</div>
         <div className="task-header">
           <div>
-            <h1>{task?.inputText || '创建一个 IM 来源任务'}</h1>
+            <h1>{task?.inputText || '等待 IM 来源任务'}</h1>
             <p>
               {task
-                ? `${task.source} · ${task.userId} · ${statusLabels[task.status]} · ${getNextActionText(task.nextAction)}`
+                ? `${statusLabels[task.status]} · ${getNextActionText(task.nextAction)}`
                 : '任务由飞书聊天内容触发，页面用于展示进度、确认步骤和预览结果。'}
             </p>
           </div>
@@ -502,15 +502,6 @@ function App() {
           )}
         </section>
 
-        <div className="top-actions" aria-label="辅助操作">
-          <button onClick={handleRefresh} disabled={!task || isLoading}>
-            刷新任务
-          </button>
-          <button onClick={handleReset} disabled={isLoading}>
-            新建任务
-          </button>
-          <button disabled={!task}>返回 IM</button>
-        </div>
       </header>
 
       <section className="workspace-grid">
@@ -520,7 +511,9 @@ function App() {
               <span>{task ? statusLabels[task.status] : '未创建'}</span>
               <h2 id="workspace-title">任务详情</h2>
             </div>
-            {task ? <strong className={`status-pill status-${task.status.toLowerCase()}`}>{task.status}</strong> : null}
+            {task ? (
+              <strong className={`status-pill status-${task.status.toLowerCase()}`}>{statusLabels[task.status]}</strong>
+            ) : null}
           </div>
 
           <section className="content-grid">
@@ -530,7 +523,7 @@ function App() {
               <dl>
                 <div>
                   <dt>来源</dt>
-                  <dd>{task?.source ?? 'im_text'}</dd>
+                  <dd>飞书聊天</dd>
                 </div>
                 <div>
                   <dt>发起人</dt>
@@ -557,6 +550,7 @@ function App() {
                 onCreate={handleCreateTask}
                 onExecute={handleExecuteTask}
                 onPlan={handlePlanTask}
+                onRefresh={handleRefresh}
                 onReset={handleReset}
                 task={task}
               />
@@ -573,7 +567,7 @@ function App() {
                       }`}
                       key={step.code}
                     >
-                      <span>{step.code}</span>
+                      <span>{step.code.split('_')[0]}</span>
                       <strong>{step.name}</strong>
                       <em>{stepStatusLabels[step.status]}</em>
                       <small>{step.requiresConfirm ? '需要确认' : '自动执行'}</small>
@@ -744,6 +738,7 @@ function ActionPanel({
   onCreate,
   onExecute,
   onPlan,
+  onRefresh,
   onReset,
   task,
 }: {
@@ -752,6 +747,7 @@ function ActionPanel({
   onCreate: () => void
   onExecute: () => void
   onPlan: () => void
+  onRefresh: () => void
   onReset: () => void
   task: TaskView | null
 }) {
@@ -801,9 +797,7 @@ function ActionPanel({
   if (task.status === 'DELIVERED') {
     return (
       <div className="action-stack">
-        <button className="primary" disabled={disabled}>
-          查看预览
-        </button>
+        <p className="action-note">交付物已在下方展示，可回到飞书继续协作。</p>
         <button disabled={disabled}>返回 IM</button>
       </div>
     )
@@ -814,6 +808,9 @@ function ActionPanel({
       <div className="action-stack">
         <button className="primary" disabled={disabled} onClick={onReset}>
           重新创建
+        </button>
+        <button disabled={disabled} onClick={onRefresh}>
+          刷新任务
         </button>
       </div>
     )
