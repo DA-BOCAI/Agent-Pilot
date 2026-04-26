@@ -487,9 +487,9 @@ function App() {
           {task?.planSteps.length ? (
             task.planSteps.map((step) => (
               <div
-                className={`progress-step ${step.status === 'DONE' || step.status === 'APPROVED' ? 'is-done' : ''} ${
-                  step.code === activeStepCode ? 'is-active' : ''
-                }`}
+                className={`progress-step step-status-${step.status.toLowerCase()} ${
+                  step.status === 'DONE' || step.status === 'APPROVED' ? 'is-done' : ''
+                } ${step.code === activeStepCode ? 'is-active' : ''}`}
                 key={step.code}
               >
                 <span>{step.code.split('_')[0]}</span>
@@ -567,7 +567,12 @@ function App() {
               {task?.planSteps.length ? (
                 <div className="step-list">
                   {task.planSteps.map((step) => (
-                    <div className={`step-row ${step.code === activeStepCode ? 'is-active' : ''}`} key={step.code}>
+                    <div
+                      className={`step-row step-status-${step.status.toLowerCase()} ${
+                        step.code === activeStepCode ? 'is-active' : ''
+                      }`}
+                      key={step.code}
+                    >
                       <span>{step.code}</span>
                       <strong>{step.name}</strong>
                       <em>{stepStatusLabels[step.status]}</em>
@@ -587,7 +592,9 @@ function App() {
                   <div className="preview-tabs" aria-label="预览类型">
                     {task.artifacts.map((artifact, index) => (
                       <button
-                        className={artifact === activeArtifact ? 'is-selected' : ''}
+                        className={`artifact-tab artifact-${artifact.type} ${
+                          artifact === activeArtifact ? 'is-selected' : ''
+                        }`}
                         key={`${artifact.type}-${artifact.title}-${index}`}
                         onClick={() => setActivePreviewIndex(index)}
                         type="button"
@@ -622,7 +629,7 @@ function ArtifactPreview({ artifact }: { artifact: Artifact }) {
   }
 
   return (
-    <div className="preview-empty">
+    <div className={`preview-empty artifact-${artifact.type}`}>
       <span>{artifactLabels[artifact.type]}</span>
       <h4>{artifact.title}</h4>
       {artifact.url ? (
@@ -640,7 +647,7 @@ function DocumentPreview({ data, fallbackTitle }: { data: DocumentPreviewData; f
   const sections = data.sections ?? data.blocks ?? []
 
   return (
-    <div className="doc-preview">
+    <div className="doc-preview artifact-doc">
       <header>
         <span>Document Preview</span>
         <h4>{data.title ?? fallbackTitle}</h4>
@@ -692,7 +699,7 @@ function SlidesPreview({ data, fallbackTitle }: { data: SlidePreviewData; fallba
   const slides = data.slides ?? []
 
   return (
-    <div className="slides-preview">
+    <div className="slides-preview artifact-slides">
       <header>
         <span>Slides Preview</span>
         <h4>{data.title ?? fallbackTitle}</h4>
