@@ -540,9 +540,11 @@ function App() {
               </dl>
             </article>
 
-            <article className="surface action-card">
+            <article className={`surface action-card action-status-${task?.status.toLowerCase() ?? 'idle'}`}>
               <h3>当前动作</h3>
-              <p>{task ? getNextActionText(task.nextAction) : '等待飞书消息卡片触发任务，或使用演示按钮创建模拟任务。'}</p>
+              <p className="action-summary">
+                {task ? getNextActionText(task.nextAction) : '等待飞书消息卡片触发任务，或使用演示按钮创建模拟任务。'}
+              </p>
               {error ? <div className="error-banner">{error}</div> : null}
               <ActionPanel
                 disabled={isLoading}
