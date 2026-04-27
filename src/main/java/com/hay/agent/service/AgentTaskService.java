@@ -3,6 +3,7 @@ package com.hay.agent.service;
 import com.hay.agent.api.dto.ConfirmTaskRequest;
 import com.hay.agent.api.dto.CreateTaskRequest;
 import com.hay.agent.domain.AgentTask;
+import com.hay.agent.domain.Artifact;
 import com.hay.agent.domain.PlanStep;
 import com.hay.agent.domain.StepStatus;
 import com.hay.agent.domain.TaskEvent;
@@ -11,19 +12,25 @@ import com.hay.agent.planner.Planner;
 import com.hay.agent.store.TaskStore;
 import com.hay.agent.tool.ToolExecutor;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import lombok.extern.slf4j.Slf4j;
+
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 文件作用：任务编排核心服务（业务层）。
  * 项目角色：维护任务状态机，驱动规划器和工具执行器，并统一记录任务事件。
  */
 
+@Slf4j
 @Service
 public class AgentTaskService {
 
@@ -31,12 +38,20 @@ public class AgentTaskService {
     private final Planner planner;
     private final ToolExecutor toolExecutor;
 
+    @Value("${agent.task.auto-run:true}")
+    private boolean autoRun;
+
     public AgentTaskService(TaskStore taskStore, Planner planner, ToolExecutor toolExecutor) {
         this.taskStore = taskStore;
         this.planner = planner;
         this.toolExecutor = toolExecutor;
     }
 
+    /**
+     * 创建任务
+     * @param request   创建任务请求
+     * @return          创建的任务实例
+     */
     public AgentTask createTask(CreateTaskRequest request) {
         if(request.getUserId() == null || request.getUserId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"用户ID不能为空");
@@ -58,10 +73,66 @@ public class AgentTaskService {
                 .updatedAt(now)
                 .build();
 
+        //记录任务创建事件
         addEvent(task, "TASK_CREATED", "Task created", Map.of("status", task.getStatus().name()));
-        return save(task);
+        
+        // 先保存任务到数据库，确保异步执行时能查到
+        AgentTask savedTask = save(task);
+        
+        if (!autoRun) {
+            log.info("当前已关闭自动执行，任务{}仅创建并等待前端手动规划/执行", savedTask.getTaskId());
+            return savedTask;
+        }
+
+        //独立异步线程 - 异步自动执行规划和所有步骤
+          CompletableFuture.runAsync(() -> {
+              try{
+                  //1.自动规划任务
+                  AgentTask plannedTask = planTask(savedTask.getTaskId());
+                  //2.遍历执行所有步骤
+                  for(PlanStep step : plannedTask.getPlanSteps()) {
+                      // 执行步骤
+                      Optional<Artifact> artifactOpt = toolExecutor.execute(step,
+                          plannedTask.getTaskId(),
+                          plannedTask.getInputText());
+                          
+                      // 保存生成的工件
+                      artifactOpt.ifPresent(artifact -> plannedTask.getArtifacts().add(artifact));
+                      
+                      //更新步骤状态为已完成
+                      step.setStatus(StepStatus.DONE);
+                      
+                      // 添加步骤完成事件
+                      addEvent(plannedTask, "STEP_COMPLETED", "步骤执行完成", 
+                          Map.of("stepId", step.getStepId(), "stepName", step.getAction()));
+                  }
+                  //3.标记任务完成，状态为已交付
+                  plannedTask.setStatus(TaskStatus.DELIVERED);
+                  plannedTask.setNextAction("none");  //没有下一步操作
+                  
+                  // 添加任务完成事件
+                  addEvent(plannedTask, "TASK_COMPLETED", "任务全部执行完成",
+                      Map.of("artifactCount", String.valueOf(plannedTask.getArtifacts().size())));
+                      
+                  save(plannedTask);
+                  log.info("任务{}自动执行完成，生成工件{}个",savedTask.getTaskId(), plannedTask.getArtifacts().size());
+              }catch (Exception e) {
+                  // 任务失败时必须回写状态并持久化，避免 Redis 长期停留在 CREATED。
+                  savedTask.setStatus(TaskStatus.FAILED);
+                  savedTask.setNextAction("none");
+                  addEvent(savedTask, "TASK_FAILED", "任务执行失败: " + e.getMessage(), Map.of("cause", e.getClass().getSimpleName()));
+                  save(savedTask);
+                  log.error("任务{}自动执行失败，已回写失败状态",savedTask.getTaskId(),e);
+              }
+          });
+        return savedTask;
     }
 
+    /**
+     * 规划任务
+     * @param taskId    任务ID
+     * @return          规划后的任务实例
+     */
     public AgentTask planTask(String taskId) {
         AgentTask task = getTask(taskId);
         if (task.getStatus() != TaskStatus.CREATED) {
@@ -78,6 +149,12 @@ public class AgentTaskService {
         return save(task);
     }
 
+    /**
+     * 确认任务步骤
+     * @param taskId    任务ID
+     * @param request   确认任务步骤请求
+     * @return          确认后的任务实例
+     */
     public AgentTask confirmStep(String taskId, ConfirmTaskRequest request) {
         AgentTask task = getTask(taskId);
         PlanStep step = task.getPlanSteps().stream()
@@ -109,6 +186,11 @@ public class AgentTaskService {
         return save(task);
     }
 
+    /**
+     * 执行任务
+     * @param taskId    任务ID
+     * @return          执行后的任务实例
+     */
     public AgentTask executeTask(String taskId) {
         AgentTask task = getTask(taskId);
         if (task.getStatus() == TaskStatus.CREATED) {
@@ -143,26 +225,53 @@ public class AgentTaskService {
             addEvent(task, "STEP_DONE", "Step completed", Map.of("stepId", step.getStepId()));
         }
 
+        //当前任务执行完成，生成了结果，状态设置为交付状态，任务执行完成
         task.setStatus(TaskStatus.DELIVERED);
         task.setNextAction("none");
         addEvent(task, "TASK_DELIVERED", "Task completed and delivered", Map.of("artifacts", String.valueOf(task.getArtifacts().size())));
         return save(task);
     }
 
+    /**
+     * 获取任务详情
+     * @param taskId    任务ID
+     * @return          任务实例
+     */
     public AgentTask getTask(String taskId) {
         return taskStore.findById(taskId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
     }
 
+    /**
+     * 获取任务事件列表
+     * @param taskId    任务ID
+     * @return          任务事件列表
+     */
     public List<TaskEvent> listEvents(String taskId) {
         return getTask(taskId).getEvents();
     }
 
+    /*
+    私有方法
+     */
+
+    /**
+     * 保存任务
+     * @param task    任务实例
+     * @return        保存后的任务实例
+     */
     private AgentTask save(AgentTask task) {
         task.setUpdatedAt(Instant.now());
         return taskStore.save(task);
     }
 
+    /**
+     * 添加任务事件
+     * @param task    任务实例
+     * @param type    事件类型
+     * @param message 事件消息
+     * @param metadata 事件元数据
+     */
     private void addEvent(AgentTask task, String type, String message, Map<String, String> metadata) {
         task.getEvents().add(TaskEvent.builder()
                 .timestamp(Instant.now())

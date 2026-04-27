@@ -11,7 +11,7 @@ import java.util.Optional;
  * 项目角色：模拟文档、PPT、交付产物生成，方便在未接入真实 MCP 工具时先跑通流程。
  */
 
-@Component
+// @Component
 public class MockToolExecutor implements ToolExecutor {
 
     @Override

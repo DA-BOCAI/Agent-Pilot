@@ -5,7 +5,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
-import javax.swing.*;
 
 /**
  * 文件作用：步骤确认请求体。

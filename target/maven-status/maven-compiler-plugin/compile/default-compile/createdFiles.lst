@@ -5,7 +5,11 @@ com\hay\agent\domain\StepStatus.class
 com\hay\agent\tool\MockToolExecutor.class
 com\hay\agent\domain\AgentTask.class
 com\hay\agent\api\ApiExceptionHandler.class
+com\hay\agent\service\LarkImEventListener.class
+com\hay\agent\tool\LarkToolExecutor.class
+com\hay\config\LLMConfig.class
 com\hay\config\OpenApiConfig.class
+com\hay\agent\planner\TaskPlanningAiService.class
 com\hay\agent\domain\PlanStep$PlanStepBuilder.class
 com\hay\agent\service\AgentTaskService.class
 com\hay\agent\api\dto\CreateTaskRequest.class
@@ -17,6 +21,7 @@ com\hay\agent\api\dto\ConfirmTaskRequest.class
 com\hay\agent\domain\TaskStatus.class
 com\hay\AgentCopilotApplication.class
 com\hay\agent\tool\ToolExecutor.class
+com\hay\agent\planner\LlmPlanner.class
 com\hay\agent\planner\MockPlanner.class
 com\hay\agent\domain\AgentTask$AgentTaskBuilder.class
 com\hay\agent\domain\Artifact$ArtifactBuilder.class
