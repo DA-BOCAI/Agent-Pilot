@@ -1,0 +1,362 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-04-26T20:05:25.4773872+08:00",
+  "title": "Design System: Agent-Pilot",
+  "extensions": {
+    "colorMeta": {
+      "feishu-blue": {
+        "role": "primary",
+        "displayName": "飞书行动蓝",
+        "canonical": "#3370ff",
+        "tonalRamp": [
+          "oklch(15% 0.15 262)",
+          "oklch(25% 0.17 262)",
+          "oklch(35% 0.19 262)",
+          "oklch(45% 0.2 262)",
+          "oklch(55% 0.2 262)",
+          "oklch(70% 0.14 262)",
+          "oklch(85% 0.07 262)",
+          "oklch(95% 0.025 262)"
+        ]
+      },
+      "feishu-blue-strong": {
+        "role": "primary",
+        "displayName": "飞书强调蓝",
+        "canonical": "#245bdb",
+        "tonalRamp": [
+          "oklch(15% 0.14 262)",
+          "oklch(25% 0.16 262)",
+          "oklch(35% 0.18 262)",
+          "oklch(45% 0.19 262)",
+          "oklch(55% 0.18 262)",
+          "oklch(70% 0.13 262)",
+          "oklch(85% 0.07 262)",
+          "oklch(95% 0.025 262)"
+        ]
+      },
+      "canvas-bg": {
+        "role": "neutral",
+        "displayName": "工作区浅灰",
+        "canonical": "#f7f8fa",
+        "tonalRamp": [
+          "oklch(15% 0.005 260)",
+          "oklch(25% 0.006 260)",
+          "oklch(35% 0.007 260)",
+          "oklch(50% 0.008 260)",
+          "oklch(65% 0.008 260)",
+          "oklch(80% 0.007 260)",
+          "oklch(90% 0.006 260)",
+          "oklch(97% 0.004 260)"
+        ]
+      },
+      "text-primary": {
+        "role": "neutral",
+        "displayName": "飞书正文黑",
+        "canonical": "#1f2329",
+        "tonalRamp": [
+          "oklch(15% 0.01 260)",
+          "oklch(25% 0.01 260)",
+          "oklch(35% 0.009 260)",
+          "oklch(45% 0.008 260)",
+          "oklch(58% 0.007 260)",
+          "oklch(72% 0.006 260)",
+          "oklch(86% 0.005 260)",
+          "oklch(95% 0.004 260)"
+        ]
+      },
+      "warning": {
+        "role": "tertiary",
+        "displayName": "等待橙",
+        "canonical": "#de7802",
+        "tonalRamp": [
+          "oklch(18% 0.08 65)",
+          "oklch(28% 0.1 65)",
+          "oklch(40% 0.13 65)",
+          "oklch(52% 0.15 65)",
+          "oklch(64% 0.14 65)",
+          "oklch(76% 0.1 65)",
+          "oklch(88% 0.05 65)",
+          "oklch(96% 0.02 65)"
+        ]
+      },
+      "success": {
+        "role": "tertiary",
+        "displayName": "完成绿",
+        "canonical": "#2ea121",
+        "tonalRamp": [
+          "oklch(18% 0.08 140)",
+          "oklch(28% 0.1 140)",
+          "oklch(40% 0.13 140)",
+          "oklch(52% 0.15 140)",
+          "oklch(64% 0.13 140)",
+          "oklch(76% 0.09 140)",
+          "oklch(88% 0.05 140)",
+          "oklch(96% 0.02 140)"
+        ]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "失败红",
+        "canonical": "#d83931",
+        "tonalRamp": [
+          "oklch(18% 0.08 30)",
+          "oklch(28% 0.1 30)",
+          "oklch(40% 0.14 30)",
+          "oklch(52% 0.16 30)",
+          "oklch(64% 0.13 30)",
+          "oklch(76% 0.08 30)",
+          "oklch(88% 0.04 30)",
+          "oklch(96% 0.02 30)"
+        ]
+      },
+      "artifact-slides": {
+        "role": "category",
+        "displayName": "演示稿琥珀",
+        "canonical": "#8f5e00",
+        "tonalRamp": [
+          "oklch(18% 0.08 70)",
+          "oklch(28% 0.09 70)",
+          "oklch(40% 0.11 70)",
+          "oklch(52% 0.12 70)",
+          "oklch(64% 0.1 70)",
+          "oklch(76% 0.07 70)",
+          "oklch(88% 0.04 70)",
+          "oklch(96% 0.02 70)"
+        ]
+      },
+      "artifact-delivery": {
+        "role": "category",
+        "displayName": "交付绿",
+        "canonical": "#2ea121",
+        "tonalRamp": [
+          "oklch(18% 0.08 140)",
+          "oklch(28% 0.1 140)",
+          "oklch(40% 0.13 140)",
+          "oklch(52% 0.15 140)",
+          "oklch(64% 0.13 140)",
+          "oklch(76% 0.09 140)",
+          "oklch(88% 0.05 140)",
+          "oklch(96% 0.02 140)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "任务标题",
+        "purpose": "顶部任务标题，只用于当前任务或创建任务入口。"
+      },
+      "headline": {
+        "displayName": "主面板标题",
+        "purpose": "主区域和大区块标题。"
+      },
+      "title": {
+        "displayName": "卡片标题",
+        "purpose": "业务卡片、预览卡片和子区块标题。"
+      },
+      "body": {
+        "displayName": "正文",
+        "purpose": "任务说明、飞书上下文、预览正文和空状态说明。"
+      },
+      "label": {
+        "displayName": "标签",
+        "purpose": "状态标签、步骤小字、tab 类型和弱提示。"
+      }
+    },
+    "shadows": [
+      {
+        "name": "panel-ambient",
+        "value": "0 8px 24px rgba(31, 35, 41, 0.06)",
+        "purpose": "顶层概览和主面板的轻层级。"
+      },
+      {
+        "name": "active-inset",
+        "value": "inset 0 0 0 1px rgba(51, 112, 255, 0.12)",
+        "purpose": "当前步骤的浅蓝内描边。"
+      },
+      {
+        "name": "focus-ring",
+        "value": "0 0 0 3px rgba(51, 112, 255, 0.14)",
+        "purpose": "输入和可交互元素的键盘焦点。"
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "160ms ease",
+        "purpose": "按钮、边框和卡片状态切换。"
+      },
+      {
+        "name": "reveal-up",
+        "value": "360ms ease-out, translateY(8px)",
+        "purpose": "页面主要区域轻量入场。"
+      },
+      {
+        "name": "reduced-motion",
+        "value": "1ms duration when prefers-reduced-motion",
+        "purpose": "尊重系统减少动态设置。"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "tablet",
+        "value": "1100px"
+      },
+      {
+        "name": "mobile",
+        "value": "720px"
+      }
+    ],
+    "layout": [
+      {
+        "name": "page-shell",
+        "value": "max-width 1180px, gutter clamp(12px, 3vw, 40px)",
+        "purpose": "保持飞书内嵌页面的稳定阅读宽度，并在窄屏保留可用边距。"
+      },
+      {
+        "name": "content-grid",
+        "value": "minmax(0, 1.05fr) minmax(300px, 0.8fr), gap 16px",
+        "purpose": "飞书上下文和当前动作并排展示，步骤与预览跨整行。"
+      },
+      {
+        "name": "preview-layout",
+        "value": "minmax(220px, 280px) minmax(0, 1fr), gap 16px",
+        "purpose": "预览 tab 保持左侧导航感，产物内容占据主要阅读区。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "主行动按钮，用于创建、生成规划、执行和确认。",
+      "html": "<button class=\"ds-btn-primary\">执行任务</button>",
+      "css": ".ds-btn-primary { min-height: 40px; border: 1px solid #245bdb; border-radius: 6px; background: #3370ff; color: #ffffff; padding: 7px 12px; font: 650 14px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; cursor: pointer; transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease; } .ds-btn-primary:hover { border-color: #4e83fd; background: #4e83fd; } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.14); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "次级操作按钮，用于刷新、新建、返回 IM 和拒绝。",
+      "html": "<button class=\"ds-btn-secondary\">刷新任务</button>",
+      "css": ".ds-btn-secondary { min-height: 36px; border: 1px solid #dee0e3; border-radius: 6px; background: #ffffff; color: #1f2329; padding: 7px 12px; font: 400 14px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; cursor: pointer; transition: color 160ms ease, border-color 160ms ease, box-shadow 160ms ease; } .ds-btn-secondary:hover { border-color: #3370ff; color: #3370ff; } .ds-btn-secondary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.14); }"
+    },
+    {
+      "name": "Status Chip",
+      "kind": "chip",
+      "refersTo": "status-chip",
+      "description": "轻量状态或模式标签。",
+      "html": "<span class=\"ds-status-chip\">API 模式</span>",
+      "css": ".ds-status-chip { display: inline-flex; align-items: center; border: 1px solid #c9ddff; border-radius: 999px; background: #eff4ff; color: #3370ff; padding: 4px 10px; font: 600 12px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; }"
+    },
+    {
+      "name": "Surface Card",
+      "kind": "card",
+      "refersTo": "surface-card",
+      "description": "普通业务卡片，承载飞书上下文、当前动作、任务步骤和预览区。",
+      "html": "<article class=\"ds-surface-card\"><h3>当前动作</h3><p>下一步：确认文档生成步骤</p></article>",
+      "css": ".ds-surface-card { border: 1px solid #dee0e3; border-radius: 8px; background: #ffffff; color: #1f2329; padding: 16px; transition: border-color 160ms ease; } .ds-surface-card:hover { border-color: #bbbfc4; } .ds-surface-card h3 { margin: 0 0 12px; font: 700 18px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; } .ds-surface-card p { margin: 0; color: #646a73; font: 400 14px/1.65 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; }"
+    },
+    {
+      "name": "Progress Step",
+      "kind": "custom",
+      "refersTo": "surface-card",
+      "description": "任务进度条中的单个步骤。",
+      "html": "<div class=\"ds-progress-step ds-progress-step-active\"><span>C</span><strong>文档生成</strong><small>等待确认</small></div>",
+      "css": ".ds-progress-step { display: grid; gap: 5px; min-width: 0; border: 1px solid #dee0e3; border-radius: 6px; background: #ffffff; padding: 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease; } .ds-progress-step span { display: inline-grid; place-items: center; width: 32px; height: 22px; border-radius: 999px; background: #f2f3f5; color: #646a73; font-size: 12px; font-weight: 600; } .ds-progress-step strong { overflow: hidden; color: #1f2329; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; } .ds-progress-step small { color: #646a73; font-size: 12px; } .ds-progress-step-active { border-color: #c9ddff; background: #eff4ff; box-shadow: inset 0 0 0 1px rgba(51, 112, 255, 0.12); } .ds-progress-step-active span { background: #3370ff; color: #ffffff; }"
+    },
+      {
+        "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "调试或本地模拟场景下的文本输入，不是默认自然语言入口。",
+      "html": "<textarea class=\"ds-input-field\" rows=\"3\">下周三给管理层同步 Agent-Pilot 协作闭环。</textarea>",
+      "css": ".ds-input-field { width: 100%; min-height: 96px; border: 1px solid #dee0e3; border-radius: 6px; background: #f9fafb; color: #1f2329; padding: 12px; resize: vertical; font: 400 14px/1.65 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; transition: border-color 160ms ease, box-shadow 160ms ease; } .ds-input-field:focus { outline: none; border-color: #3370ff; box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.14); }"
+      }
+    ,
+    {
+      "name": "Preview Tab",
+      "kind": "custom",
+      "refersTo": "surface-card",
+      "description": "交付预览中的产物类型入口，按文档、演示稿、交付链接使用轻量分类色。",
+      "html": "<button class=\"ds-preview-tab ds-preview-tab-slides\"><span>演示稿</span><strong>Agent-Pilot 管理层汇报</strong></button>",
+      "css": ".ds-preview-tab { display: grid; gap: 4px; min-height: 68px; border: 1px solid #dee0e3; border-radius: 6px; background: #ffffff; color: #1f2329; padding: 7px 12px; text-align: left; cursor: pointer; transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease; } .ds-preview-tab span { color: #3370ff; font: 600 12px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; } .ds-preview-tab strong { overflow: hidden; color: #1f2329; font: 600 14px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; text-overflow: ellipsis; white-space: nowrap; } .ds-preview-tab:hover { border-color: #3370ff; } .ds-preview-tab:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.14); } .ds-preview-tab-slides { border-color: #f3d49b; background: #fff7e8; } .ds-preview-tab-slides span { color: #8f5e00; }"
+    },
+    {
+      "name": "Current Action Card",
+      "kind": "card",
+      "refersTo": "surface-card",
+      "description": "任务下一步的唯一视觉焦点，按状态切换浅底和标题色。",
+      "html": "<article class=\"ds-action-card\"><h3>当前动作</h3><p>下一步：确认文档生成步骤</p><button class=\"ds-action-primary\">通过</button></article>",
+      "css": ".ds-action-card { border: 1px solid #c9ddff; border-radius: 8px; background: #eff4ff; color: #1f2329; padding: 16px; } .ds-action-card h3 { margin: 0 0 12px; color: #245bdb; font: 700 18px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; } .ds-action-card p { margin: 0 0 16px; color: #1f2329; font: 650 16px/1.55 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; } .ds-action-primary { min-height: 40px; border: 1px solid #245bdb; border-radius: 6px; background: #3370ff; color: #ffffff; padding: 7px 12px; font: 650 14px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif; cursor: pointer; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "飞书任务夹板",
+    "overview": "Agent-Pilot 的界面像飞书工作流旁边的一块任务夹板：轻、清楚、稳定，只把用户此刻需要判断的任务状态、确认动作和交付预览放到前台。它服务于 IM 触发后的办公协同链路，不抢飞书生态本身的主场。\n\n系统应保持产品型界面的克制密度。蓝色用于行动和当前状态，白色与浅灰承担信息分区，细边框负责结构，轻阴影只提示层级。不要制造独立品牌站感，也不要把 AI 能力包装成夸张的视觉奇观。",
+    "keyCharacteristics": [
+      "低噪音飞书蓝白灰，主色只用于可行动或当前状态。",
+      "信息架构稳定，优先展示任务概览、进度步骤、飞书上下文、当前动作、任务步骤和预览区。",
+      "业务语言优先，技术字段默认隐藏。",
+      "紧凑但不拥挤，适配飞书内嵌桌面和窄屏视口。"
+    ],
+    "rules": [
+      {
+        "name": "The One Blue Rule",
+        "body": "蓝色只表达主行动、当前状态和选中状态；不要用第二套蓝紫或青色体系制造品牌感。",
+        "section": "colors"
+      },
+      {
+        "name": "The Quiet Canvas Rule",
+        "body": "页面背景必须保持浅灰，主要内容必须落在白色或浅灰纸面上；不要用深色科技背景、渐变背景或大面积彩色容器。",
+        "section": "colors"
+      },
+      {
+        "name": "The Semantic Tint Rule",
+        "body": "橙、绿、红必须成套出现为文字、浅底和 1px 全边框；禁止只靠单一色块表达状态。",
+        "section": "colors"
+      },
+      {
+        "name": "The Business Language Rule",
+        "body": "标题和正文必须说业务状态，不说内部实现；除非是开发调试视图，避免把 `taskId`、`requestId`、`createdAt`、`updatedAt` 放到界面层级中。",
+        "section": "typography"
+      },
+      {
+        "name": "The Border First Rule",
+        "body": "先用细边框和背景层次分区，只有顶层面板和 focus 可以使用阴影。",
+        "section": "elevation"
+      },
+      {
+        "name": "The One Action Rule",
+        "body": "每个任务状态只暴露一个主要下一步；工具动作不得和主动作并列抢注意力。",
+        "section": "components"
+      },
+      {
+        "name": "The Product Boldness Rule",
+        "body": "视觉强化只集中在当前动作卡和主按钮；其他区域保持安静。",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Do 使用 `#3370ff` 作为唯一主行动色，并把它限制在按钮、当前状态、选中项和小型标签中。",
+      "Do 保持 `#f7f8fa` 背景、白色主面板、细分割线和轻阴影，贴近飞书内嵌应用。",
+      "Do 用橙、绿、红的浅底和全边框表达等待、完成、失败，不要只换文字颜色。",
+      "Do 优先展示任务概览、进度步骤、飞书上下文、当前动作、任务步骤和预览区。",
+      "Do 用 spacing token 控制间距，避免在同一层级混用任意 10px、13px、18px 这类无语义值。",
+      "Do 保持一个明确主动作；刷新、新建、返回这类工具动作不要和当前动作并列抢注意力。",
+      "Do 把视觉强化集中在当前动作卡和主按钮，其他区域保持安静。",
+      "Do 在窄屏下保持模块顺序，只把网格折叠为单列。",
+      "Do 尊重 `prefers-reduced-motion`，动画只用于轻微入场、hover 和 focus 反馈。"
+    ],
+    "donts": [
+      "Don't 做成通用 agent dashboard、运维控制台或调试台。",
+      "Don't 默认加入右侧工作台、事件流、审计日志、trace 面板、技术元数据、任务 ID、请求 ID、创建时间和更新时间。",
+      "Don't 把自然语言入口放在页面输入框里；飞书聊天 API 是默认输入来源。",
+      "Don't 使用重装饰、强品牌渐变、大面积深色科技感、过度卡片化布局或营销页面式 hero。",
+      "Don't 使用彩色侧边条、渐变文字、玻璃拟态或重复的图标卡片网格。",
+      "Don't 把产物分类色扩散到正文区、主按钮或页面背景。",
+      "Don't 在同一屏重复表达相同信息，例如顶部摘要、上下文卡片和动作卡片同时重复完整状态链路。",
+      "Don't 为了“更大胆”添加渐变文字、玻璃卡片、深色科技背景或额外装饰图形。"
+    ]
+  }
+}
