@@ -2,6 +2,7 @@ package com.hay.agent.api;
 
 import com.hay.agent.api.dto.ConfirmTaskRequest;
 import com.hay.agent.api.dto.CreateTaskRequest;
+import com.hay.agent.api.dto.GenerateStepPreviewRequest;
 import com.hay.agent.api.dto.TaskView;
 import com.hay.agent.domain.TaskEvent;
 import com.hay.agent.mapper.TaskMapper;
@@ -54,6 +55,14 @@ public class TaskController {
     public ResponseEntity<TaskView> confirmTask(@PathVariable String taskId,
                                                 @Valid @RequestBody ConfirmTaskRequest request) {
         return ResponseEntity.ok(taskMapper.toView(agentTaskService.confirmStep(taskId, request)));
+    }
+
+    @PostMapping("/{taskId}/steps/{stepId}/preview")
+    @Operation(summary = "生成步骤预览", description = "为文档/PPT步骤生成结构化预览，用于正式创建飞书产物前的二次确认")
+    public ResponseEntity<TaskView> generateStepPreview(@PathVariable String taskId,
+                                                        @PathVariable String stepId,
+                                                        @RequestBody(required = false) GenerateStepPreviewRequest request) {
+        return ResponseEntity.ok(taskMapper.toView(agentTaskService.generateStepPreview(taskId, stepId, request)));
     }
 
     @PostMapping("/{taskId}/execute")

@@ -128,18 +128,25 @@ public class MarkdownPreviewParser {
         String currentTitle = null;
         int currentLevel = 0;
         List<String> currentBody = new ArrayList<>();
+        List<String> preface = new ArrayList<>();
 
         for (String line : lines) {
-            Matcher matcher = HEADING_PATTERN.matcher(line);
+            Matcher matcher = HEADING_PATTERN.matcher(line.trim());
             if (matcher.matches()) {
-                if (currentTitle != null) {
+                boolean hasCurrentSection = currentTitle != null;
+                if (hasCurrentSection) {
                     sections.add(new MarkdownSection(currentLevel, currentTitle, new ArrayList<>(currentBody)));
                 }
+                List<String> nextBody = hasCurrentSection ? new ArrayList<>() : new ArrayList<>(preface);
                 currentLevel = matcher.group(1).length();
                 currentTitle = matcher.group(2).trim();
-                currentBody = new ArrayList<>();
+                currentBody = nextBody;
             } else {
-                currentBody.add(line);
+                if (currentTitle == null) {
+                    preface.add(line);
+                } else {
+                    currentBody.add(line);
+                }
             }
         }
 
@@ -164,13 +171,15 @@ public class MarkdownPreviewParser {
         List<String> preface = new ArrayList<>();
 
         for (String line : lines) {
-            Matcher matcher = PPT_HEADING_PATTERN.matcher(line);
+            Matcher matcher = PPT_HEADING_PATTERN.matcher(line.trim());
             if (matcher.matches()) {
-                if (currentTitle != null) {
+                boolean hasCurrentSlide = currentTitle != null;
+                if (hasCurrentSlide) {
                     slides.add(new MarkdownSection(2, currentTitle, new ArrayList<>(currentBody)));
                 }
+                List<String> nextBody = hasCurrentSlide ? new ArrayList<>() : new ArrayList<>(preface);
                 currentTitle = matcher.group(1).trim();
-                currentBody = new ArrayList<>();
+                currentBody = nextBody;
             } else if (currentTitle == null) {
                 preface.add(line);
             } else {
@@ -186,7 +195,7 @@ public class MarkdownPreviewParser {
             warnings.add("未检测到 ## 级标题，已将全文作为单页内容");
             slides.add(new MarkdownSection(2, "PPT", List.of(markdown)));
         } else if (preface.stream().anyMatch(line -> !line.isBlank())) {
-            warnings.add("在第一个 ## 标题之前存在内容，已保留在原始 markdown 中但未单独拆页");
+            warnings.add("在第一个 ## 标题之前存在内容，已并入首页正文");
         }
 
         return slides;
@@ -219,7 +228,7 @@ public class MarkdownPreviewParser {
                     blockIndex = flushBlock(blocks, sectionId, blockIndex, currentType, paragraph, bullets);
                 }
                 currentType = BlockType.PARAGRAPH;
-                if (paragraph.length() > 0) {
+                if (!paragraph.isEmpty()) {
                     paragraph.append(' ');
                 }
                 paragraph.append(line.trim());
@@ -236,7 +245,7 @@ public class MarkdownPreviewParser {
                            BlockType currentType,
                            StringBuilder paragraph,
                            List<String> bullets) {
-        if (currentType == BlockType.PARAGRAPH && paragraph.length() > 0) {
+        if (currentType == BlockType.PARAGRAPH && !paragraph.isEmpty()) {
             blocks.add(DocumentPreviewResponse.Block.builder()
                     .id(sectionId + "-blk-" + (blockIndex + 1))
                     .type("paragraph")
@@ -278,7 +287,7 @@ public class MarkdownPreviewParser {
     private String joinLines(List<String> lines) {
         StringBuilder builder = new StringBuilder();
         for (String line : lines) {
-            if (builder.length() > 0) {
+            if (!builder.isEmpty()) {
                 builder.append(System.lineSeparator());
             }
             builder.append(line);

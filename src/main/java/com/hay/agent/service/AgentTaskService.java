@@ -2,6 +2,9 @@ package com.hay.agent.service;
 
 import com.hay.agent.api.dto.ConfirmTaskRequest;
 import com.hay.agent.api.dto.CreateTaskRequest;
+import com.hay.agent.api.dto.GenerateStepPreviewRequest;
+import com.hay.agent.api.dto.preview.DocumentPreviewRequest;
+import com.hay.agent.api.dto.preview.PresentationPreviewRequest;
 import com.hay.agent.domain.AgentTask;
 import com.hay.agent.domain.Artifact;
 import com.hay.agent.domain.PlanStep;
@@ -37,14 +40,22 @@ public class AgentTaskService {
     private final TaskStore taskStore;
     private final Planner planner;
     private final ToolExecutor toolExecutor;
+    private final ContentPreviewService contentPreviewService;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @Value("${agent.task.auto-run:true}")
     private boolean autoRun;
 
-    public AgentTaskService(TaskStore taskStore, Planner planner, ToolExecutor toolExecutor) {
+    public AgentTaskService(TaskStore taskStore,
+                            Planner planner,
+                            ToolExecutor toolExecutor,
+                            ContentPreviewService contentPreviewService,
+                            com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
         this.taskStore = taskStore;
         this.planner = planner;
         this.toolExecutor = toolExecutor;
+        this.contentPreviewService = contentPreviewService;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -184,6 +195,63 @@ public class AgentTaskService {
         }
 
         return save(task);
+    }
+
+    /**
+     * 为指定步骤生成预览产物。用于 confirm1 之后、正式创建飞书产物之前的 confirm2。
+     */
+    public AgentTask generateStepPreview(String taskId, String stepId, GenerateStepPreviewRequest request) {
+        AgentTask task = getTask(taskId);
+        PlanStep step = task.getPlanSteps().stream()
+                .filter(s -> s.getStepId().equals(stepId))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Step not found"));
+
+        if (!"C_DOC".equals(step.getStepId()) && !"D_SLIDES".equals(step.getStepId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only document and slides steps support preview");
+        }
+
+        try {
+            Object preview = buildPreview(task, step, request);
+            task.getArtifacts().removeIf(artifact -> step.getStepId().equals(artifact.getStepId())
+                    && artifact.getType() != null
+                    && artifact.getType().endsWith("-preview"));
+            task.getArtifacts().add(Artifact.builder()
+                    .type("D_SLIDES".equals(step.getStepId()) ? "slides-preview" : "docs-preview")
+                    .stepId(step.getStepId())
+                    .title("D_SLIDES".equals(step.getStepId()) ? "PPT预览" : "文档预览")
+                    .url("preview://" + task.getTaskId() + "/" + step.getStepId())
+                    .previewData(objectMapper.valueToTree(preview))
+                    .build());
+
+            step.setStatus(StepStatus.WAIT_CONFIRM);
+            task.setStatus(TaskStatus.WAIT_CONFIRM);
+            task.setNextAction("confirm:" + step.getStepId());
+            addEvent(task, "STEP_PREVIEW_READY", "Step preview generated",
+                    Map.of("stepId", step.getStepId(), "artifactType", "D_SLIDES".equals(step.getStepId()) ? "slides-preview" : "docs-preview"));
+            return save(task);
+        } catch (Exception e) {
+            step.setStatus(StepStatus.FAILED);
+            task.setStatus(TaskStatus.FAILED);
+            task.setNextAction("none");
+            addEvent(task, "STEP_PREVIEW_FAILED", "Step preview failed: " + e.getMessage(), Map.of("stepId", step.getStepId()));
+            save(task);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Generate preview failed: " + e.getMessage(), e);
+        }
+    }
+
+    private Object buildPreview(AgentTask task, PlanStep step, GenerateStepPreviewRequest request) {
+        if ("D_SLIDES".equals(step.getStepId())) {
+            return contentPreviewService.previewPresentation(PresentationPreviewRequest.builder()
+                    .userInput(task.getInputText())
+                    .topic(step.getAction())
+                    .theme(request == null ? null : request.getTheme())
+                    .build());
+        }
+        return contentPreviewService.previewDocument(DocumentPreviewRequest.builder()
+                .userInput(task.getInputText())
+                .docType(step.getAction())
+                .build());
     }
 
     /**

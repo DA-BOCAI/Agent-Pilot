@@ -16,16 +16,18 @@ agent:
       enabled: ${AGENT_REDIS_ENABLED:true}
   task:
     auto-run: ${AGENT_TASK_AUTO_RUN:true}
+  tool:
+    lark-cli-timeout: ${LARK_CLI_TIMEOUT:180s}
 
-# 千问大模型配置（兼容OpenAI接口）
+# 豆包大模型配置（兼容OpenAI接口）
 langchain4j:
   open-ai:
-    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    api-key: ${API_KEY}
-    model-name: qwen-plus
-    temperature: 0.1
-    timeout: 120s
-    log-requests: true
-    log-responses: true
+    base-url: ${LLM_BASE_URL:https://ark.cn-beijing.volces.com/api/v3}
+    api-key: ${LLM_API_KEY:}
+    model-name: ${LLM_ENDPOINT_ID:}
+    temperature: ${LLM_TEMPERATURE:0.1}
+    connect-timeout: ${LLM_CONNECT_TIMEOUT:10s}
+    read-timeout: ${LLM_READ_TIMEOUT:300s}
+
 
 

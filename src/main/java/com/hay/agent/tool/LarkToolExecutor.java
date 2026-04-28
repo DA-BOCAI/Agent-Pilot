@@ -5,6 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hay.agent.domain.Artifact;
 import com.hay.agent.domain.PlanStep;
 import com.hay.agent.service.ContentGeneratorService;
+import com.hay.agent.service.presentation.LarkSlideXmlRenderer;
+import com.hay.agent.service.presentation.PresentationMarkdownParser;
+import com.hay.agent.service.presentation.PresentationSlide;
+import com.hay.agent.service.presentation.PresentationTheme;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
@@ -35,14 +39,20 @@ public class LarkToolExecutor implements ToolExecutor {
 
     private final ObjectMapper objectMapper;
     private final ContentGeneratorService contentGeneratorService;
+    private final PresentationMarkdownParser presentationMarkdownParser;
+    private final LarkSlideXmlRenderer larkSlideXmlRenderer;
     private static final String LARK_CLI_PATH = "C:\\Users\\Swiftie\\AppData\\Roaming\\npm\\node_modules\\@larksuite\\cli\\scripts\\run.js";
     private final Duration larkCliTimeout;
 
     public LarkToolExecutor(ObjectMapper objectMapper,
                             ContentGeneratorService contentGeneratorService,
+                            PresentationMarkdownParser presentationMarkdownParser,
+                            LarkSlideXmlRenderer larkSlideXmlRenderer,
                             @Value("${agent.tool.lark-cli-timeout:180s}") Duration larkCliTimeout) {
         this.objectMapper = objectMapper;
         this.contentGeneratorService = contentGeneratorService;
+        this.presentationMarkdownParser = presentationMarkdownParser;
+        this.larkSlideXmlRenderer = larkSlideXmlRenderer;
         this.larkCliTimeout = larkCliTimeout;
     }
 
@@ -111,20 +121,17 @@ public class LarkToolExecutor implements ToolExecutor {
             String title = resolveMarkdownTitle(pptContent, fallbackTitle);
             log.info("【PPT调试】开始创建飞书演示文稿，真实标题：{}，内容长度：{}", title, pptContent.length());
 
-            List<String> pages = splitPptPages(pptContent);
-            if (pages.isEmpty()) {
-                pages = List.of(pptContent);
-            }
+            PresentationTheme theme = PresentationTheme.fromText(inputText + "\n" + title);
+            List<PresentationSlide> slides = presentationMarkdownParser.parse(pptContent, title);
 
-            if (pages.size() > 10) {
-                throw new IllegalStateException("PPT页数超过Lark CLI单次创建上限10页，当前页数=" + pages.size() + "，请先缩减内容或后续拆分创建");
+            if (slides.size() > 10) {
+                throw new IllegalStateException("PPT页数超过Lark CLI单次创建上限10页，当前页数=" + slides.size() + "，请先缩减内容或后续拆分创建");
             }
 
             JsonNode createJson = executeCliJson(List.of(
                     LARK_CLI_PATH,
                     "slides", "+create",
                     "--title", title,
-                    "--slides", "[]",
                     "--as", "bot"
             ), "创建空飞书演示文稿");
 
@@ -132,21 +139,20 @@ public class LarkToolExecutor implements ToolExecutor {
             String slidesUrl = readFirstRequiredText(createJson, "创建空幻灯片失败，未返回链接", "/data/url");
             log.info("【PPT调试】空PPT创建成功，xmlPresentationId={}，url={}", xmlPresentationId, slidesUrl);
 
-            for (int i = 0; i < pages.size(); i++) {
-                String page = pages.get(i);
-                String slideXml = buildSlideXml(page, i + 1, title);
-                log.info("【PPT调试】准备写入第{}页，页面长度={}，XML预览={} ", i + 1, page.length(), truncate(slideXml));
+            for (int i = 0; i < slides.size(); i++) {
+                PresentationSlide slide = slides.get(i);
+                String slideXml = larkSlideXmlRenderer.render(slide, title, theme);
+                String paramsJson = escapeCliJsonArgument(createXmlPresentationParams(xmlPresentationId));
+                String slideData = objectMapper.writeValueAsString(createSlideData(slideXml));
+                log.info("【PPT调试】准备写入第{}页，标题={}，主题={}，XML预览={} ", i + 1, slide.getTitle(), theme.getCode(), truncate(slideXml));
 
-                // Windows命令行下JSON双引号需要转义
-                String paramsJson = objectMapper.writeValueAsString(createXmlPresentationParams(xmlPresentationId))
-                        .replace("\"", "\\\"");
                 JsonNode slideJson = executeCliJson(List.of(
                         LARK_CLI_PATH,
                         "slides", "xml_presentation.slide", "create",
                         "--params", paramsJson,
                         "--data", "-",
                         "--as", "bot"
-                ), "写入飞书演示文稿第" + (i + 1) + "页", objectMapper.writeValueAsString(createSlideData(slideXml)));
+                ), "写入飞书演示文稿第" + (i + 1) + "页", slideData);
 
                 log.info("【PPT调试】第{}页写入结果：{}", i + 1, truncate(slideJson.toString()));
             }
@@ -345,9 +351,15 @@ public class LarkToolExecutor implements ToolExecutor {
         String[] rawPages = Pattern.compile("(?=^##\\s)", Pattern.MULTILINE).split(pptContent == null ? "" : pptContent);
         List<String> pages = new ArrayList<>();
         for (String page : rawPages) {
-            if (page != null && !page.trim().isEmpty()) {
-                pages.add(page.trim());
+            if (page == null || page.trim().isEmpty()) {
+                continue;
             }
+
+            String trimmed = page.trim();
+            if (!trimmed.startsWith("## ") && rawPages.length > 1 && isOnlyMarkdownTitle(trimmed)) {
+                continue;
+            }
+            pages.add(trimmed);
         }
         return pages;
     }
@@ -360,13 +372,101 @@ public class LarkToolExecutor implements ToolExecutor {
      * @return 幻灯片XML字符串
      */
     private String buildSlideXml(String page, int index, String title) {
-        String safeTitle = escapeXml(title + " - " + index);
-        String safePage = escapeXml(page).replace("\n", "</p><p>");
+        // 提取页面标题（## 开头的行）
+        String pageTitle = "第" + index + "页";
+        String pageContent = page;
+        Matcher headingMatcher = Pattern.compile("^##\\s+(.+)$", Pattern.MULTILINE).matcher(page);
+        if (headingMatcher.find()) {
+            pageTitle = headingMatcher.group(1).trim();
+            pageContent = page.substring(headingMatcher.end()).trim();
+        }
+        
+        String safeTitle = escapeXml(pageTitle);
+        String bodyContent = buildBodyContentXml(pageContent);
+        
+        // 专业商务风PPT模板：浅灰背景 + 标题 + 内容 + 装饰元素
         return "<slide xmlns=\"http://www.larkoffice.com/sml/2.0\">" +
+                // 页面背景
+                "<style><fill><fillColor color=\"rgb(248,250,252)\"/></fill></style>" +
                 "<data>" +
-                "<shape type=\"text\" topLeftX=\"80\" topLeftY=\"80\" width=\"800\" height=\"700\">" +
-                "<content textType=\"body\"><p>" + safeTitle + "</p><p>" + safePage + "</p></content>" +
-                "</shape></data></slide>";
+                // 顶部装饰条
+                "<shape type=\"rect\" topLeftX=\"0\" topLeftY=\"0\" width=\"960\" height=\"10\">" +
+                "<fill><fillColor color=\"rgb(59,130,246)\"/></fill>" +
+                "</shape>" +
+                // 页面标题
+                "<shape type=\"text\" topLeftX=\"80\" topLeftY=\"40\" width=\"800\" height=\"80\">" +
+                "<content textType=\"title\" fontSize=\"36\" color=\"rgb(15,23,42)\" bold=\"true\"><p>" + safeTitle + "</p></content>" +
+                "</shape>" +
+                // 标题下方分隔线
+                "<shape type=\"rect\" topLeftX=\"80\" topLeftY=\"120\" width=\"80\" height=\"4\">" +
+                "<fill><fillColor color=\"rgb(59,130,246)\"/></fill>" +
+                "</shape>" +
+                // 页面内容
+                "<shape type=\"text\" topLeftX=\"80\" topLeftY=\"150\" width=\"800\" height=\"350\">" +
+                "<content textType=\"body\" fontSize=\"16\" color=\"rgb(30,41,59)\" lineSpacing=\"multiple:1.4\">" + bodyContent + "</content>" +
+                "</shape>" +
+                // 页脚
+                "<shape type=\"text\" topLeftX=\"80\" topLeftY=\"500\" width=\"800\" height=\"30\">" +
+                "<content textType=\"caption\" fontSize=\"12\" color=\"rgb(100,116,139)\"><p>" + escapeXml(title) + " | 第" + index + "页</p></content>" +
+                "</shape>" +
+                "</data></slide>";
+    }
+
+    private boolean isOnlyMarkdownTitle(String content) {
+        String[] lines = content.split("\\R");
+        if (lines.length == 0 || !lines[0].trim().matches("^#\\s+.+$")) {
+            return false;
+        }
+        for (int i = 1; i < lines.length; i++) {
+            if (!lines[i].trim().isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private String buildBodyContentXml(String markdown) {
+        if (markdown == null || markdown.isBlank()) {
+            return "<p></p>";
+        }
+
+        StringBuilder content = new StringBuilder();
+        boolean inList = false;
+        for (String rawLine : markdown.split("\\R")) {
+            String line = rawLine.trim();
+            if (line.isEmpty()) {
+                continue;
+            }
+            if (line.startsWith("```")) {
+                continue;
+            }
+
+            Matcher heading = Pattern.compile("^#{1,6}\\s+(.+)$").matcher(line);
+            if (heading.matches()) {
+                line = heading.group(1).trim();
+            }
+
+            Matcher bullet = Pattern.compile("^[-*+]\\s+(.+)$").matcher(line);
+            if (bullet.matches()) {
+                if (!inList) {
+                    content.append("<ul>");
+                    inList = true;
+                }
+                content.append("<li><p>").append(escapeXml(bullet.group(1).trim())).append("</p></li>");
+                continue;
+            }
+
+            if (inList) {
+                content.append("</ul>");
+                inList = false;
+            }
+            content.append("<p>").append(escapeXml(line)).append("</p>");
+        }
+
+        if (inList) {
+            content.append("</ul>");
+        }
+        return content.isEmpty() ? "<p></p>" : content.toString();
     }
 
     /**
@@ -386,6 +486,10 @@ public class LarkToolExecutor implements ToolExecutor {
     private JsonNode createSlideData(String slideXml) {
         return objectMapper.createObjectNode()
                 .set("slide", objectMapper.createObjectNode().put("content", slideXml));
+    }
+
+    private String escapeCliJsonArgument(JsonNode jsonNode) throws Exception {
+        return objectMapper.writeValueAsString(jsonNode).replace("\"", "\\\"");
     }
 
     /**

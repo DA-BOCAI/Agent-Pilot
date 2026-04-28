@@ -2,6 +2,8 @@ package com.hay.agent.service;
 
 import com.hay.agent.api.dto.ConfirmTaskRequest;
 import com.hay.agent.api.dto.CreateTaskRequest;
+import com.hay.agent.api.dto.GenerateStepPreviewRequest;
+import com.hay.agent.api.dto.preview.PresentationPreviewResponse;
 import com.hay.agent.domain.AgentTask;
 import com.hay.agent.domain.PlanStep;
 import com.hay.agent.domain.StepStatus;
@@ -33,6 +35,9 @@ class AgentTaskServiceTest {
 
     @MockBean
     private ToolExecutor toolExecutor;
+
+    @MockBean
+    private ContentPreviewService contentPreviewService;
 
     @Test
     void shouldRunTaskLifecycleWithTwoConfirmations() {
@@ -75,6 +80,46 @@ class AgentTaskServiceTest {
         task = agentTaskService.executeTask(task.getTaskId());
         assertEquals(TaskStatus.DELIVERED, task.getStatus());
         assertNotNull(task.getArtifacts());
+    }
+
+    @Test
+    void shouldGenerateSlidesPreviewForConfirm2() {
+        when(planner.plan(anyString())).thenReturn(List.of(
+                PlanStep.builder().stepId("D_SLIDES").scene("D").action("生成演示文稿").tool("lark-slides").requiresConfirm(true).status(StepStatus.PENDING).build()
+        ));
+        when(contentPreviewService.previewPresentation(any())).thenReturn(PresentationPreviewResponse.builder()
+                .artifactType("PRESENTATION")
+                .title("双十一方案")
+                .theme("campaign")
+                .pageCount(1)
+                .slides(List.of())
+                .warnings(List.of())
+                .build());
+
+        CreateTaskRequest create = new CreateTaskRequest();
+        create.setInputText("生成双十一大促PPT");
+        create.setUserId("u-test-02");
+        create.setRequestId("req-test-02");
+
+        AgentTask task = agentTaskService.createTask(create);
+        task = agentTaskService.planTask(task.getTaskId());
+        task = agentTaskService.executeTask(task.getTaskId());
+        assertEquals(TaskStatus.WAIT_CONFIRM, task.getStatus());
+
+        ConfirmTaskRequest confirmIntent = new ConfirmTaskRequest();
+        confirmIntent.setStepId("D_SLIDES");
+        confirmIntent.setApproved(true);
+        task = agentTaskService.confirmStep(task.getTaskId(), confirmIntent);
+
+        GenerateStepPreviewRequest previewRequest = new GenerateStepPreviewRequest();
+        previewRequest.setTheme("campaign");
+        task = agentTaskService.generateStepPreview(task.getTaskId(), "D_SLIDES", previewRequest);
+
+        assertEquals(TaskStatus.WAIT_CONFIRM, task.getStatus());
+        assertEquals(StepStatus.WAIT_CONFIRM, task.getPlanSteps().get(0).getStatus());
+        assertEquals(1, task.getArtifacts().size());
+        assertEquals("slides-preview", task.getArtifacts().get(0).getType());
+        assertEquals("campaign", task.getArtifacts().get(0).getPreviewData().path("theme").asText());
     }
 }
 

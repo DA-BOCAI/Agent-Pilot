@@ -10,12 +10,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.ResourceAccessException;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -35,19 +37,29 @@ public class LlmPlanner implements Planner {
     private final String apiKey;
     private final String modelName;
     private final double temperature;
+    private final Duration connectTimeout;
+    private final Duration readTimeout;
 
     public LlmPlanner(RestClient.Builder restClientBuilder,
                       ObjectMapper objectMapper,
-                      @Value("${langchain4j.open-ai.base-url}") String baseUrl,
-                      @Value("${langchain4j.open-ai.api-key}") String apiKey,
-                      @Value("${langchain4j.open-ai.model-name}") String modelName,
-                      @Value("${langchain4j.open-ai.temperature:0.0}") double temperature) {
-        this.restClient = restClientBuilder.build();
+                      @Value("${langchain4j.open-ai.base-url:https://ark.cn-beijing.volces.com/api/v3}") String baseUrl,
+                      @Value("${langchain4j.open-ai.api-key:}") String apiKey,
+                      @Value("${langchain4j.open-ai.model-name:}") String modelName,
+                      @Value("${langchain4j.open-ai.temperature:0.0}") double temperature,
+                      @Value("${langchain4j.open-ai.connect-timeout:10s}") Duration connectTimeout,
+                      @Value("${langchain4j.open-ai.read-timeout:180s}") Duration readTimeout) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(connectTimeout);
+        requestFactory.setReadTimeout(readTimeout);
+
+        this.restClient = restClientBuilder.requestFactory(requestFactory).build();
         this.objectMapper = objectMapper;
         this.baseUrl = baseUrl;
         this.apiKey = apiKey;
         this.modelName = modelName;
         this.temperature = temperature;
+        this.connectTimeout = connectTimeout;
+        this.readTimeout = readTimeout;
     }
 
     @Override
@@ -59,7 +71,8 @@ public class LlmPlanner implements Planner {
         int maxRetries = 2;
         for (int attempt = 1; attempt <= maxRetries + 1; attempt++) {
             try {
-                log.info("开始请求大模型进行计划拆解，尝试 {}/{}，输入长度：{}", attempt, maxRetries + 1, inputText.length());
+                log.info("开始请求大模型进行计划拆解，尝试 {}/{}，baseUrl={}, modelName={}, connectTimeout={}, readTimeout={}, 输入长度：{}",
+                        attempt, maxRetries + 1, baseUrl, modelName, connectTimeout, readTimeout, inputText.length());
                 String content = invokeModel(inputText);
                 log.info("大模型原始返回：{}", content);
 
@@ -133,21 +146,23 @@ public class LlmPlanner implements Planner {
         var messages = root.putArray("messages");
         messages.addObject()
                 .put("role", "system")
-                .put("content", "你是一个办公智能Agent的主规划师。请严格根据用户意图拆解步骤，必须只输出 JSON 数组，不要输出任何额外说明、markdown 或代码块。\n" +
-                        "【严格约束规则，必须100%遵守】：\n" +
-                        "1. stepId 只能从以下枚举值中选择，绝对禁止自定义其他值：\n" +
-                        "   - C_DOC: 创建飞书文档，用于生成各类方案、报告、需求文档等文本内容\n" +
-                        "   - D_SLIDES: 创建飞书演示文稿PPT，用于生成汇报用PPT\n" +
-                        "   - SEND_IM: 发送飞书消息，用于给用户发送通知、交付结果等\n" +
-                        "   - F_DELIVER: 最终结果交付，代表整个任务完成\n" +
-                        "2. tool 字段只能从以下值中选择，禁止其他值：\n" +
-                        "   - lark-doc: 对应C_DOC步骤\n" +
-                        "   - lark-slides: 对应D_SLIDES步骤\n" +
-                        "   - lark-im: 对应SEND_IM步骤\n" +
-                        "   - none: 其他不需要调用工具的步骤\n" +
-                        "3. 每个步骤对象必须包含 stepId、scene、action、tool、requiresConfirm 5个字段\n" +
-                        "4. 只要涉及文档/PPT生成、消息发送、结果交付等操作，requiresConfirm必须设为true\n" +
-                        "5. 拆解步骤要符合逻辑顺序，比如需要先生成文档内容，再生成PPT，最后通知用户")
+                .put("content", """
+                        你是一个办公智能Agent的主规划师。请严格根据用户意图拆解步骤，必须只输出 JSON 数组，不要输出任何额外说明、markdown 或代码块。
+                        【严格约束规则，必须100%遵守】：
+                        1. stepId 只能从以下枚举值中选择，绝对禁止自定义其他值：
+                           - C_DOC: 创建飞书文档，用于生成各类方案、报告、需求文档等文本内容
+                           - D_SLIDES: 创建飞书演示文稿PPT，用于生成汇报用PPT
+                           - SEND_IM: 发送飞书消息，用于给用户发送通知、交付结果等
+                           - F_DELIVER: 最终结果交付，代表整个任务完成
+                        2. tool 字段只能从以下值中选择，禁止其他值：
+                           - lark-doc: 对应C_DOC步骤
+                           - lark-slides: 对应D_SLIDES步骤
+                           - lark-im: 对应SEND_IM步骤
+                           - none: 其他不需要调用工具的步骤
+                        3. 每个步骤对象必须包含 stepId、scene、action、tool、requiresConfirm 5个字段
+                        4. 只要涉及文档/PPT生成、消息发送、结果交付等操作，requiresConfirm必须设为true
+                        5. 拆解步骤要符合逻辑顺序，比如需要先生成文档内容，再生成PPT，最后通知用户
+                        """)
                 ;
         messages.addObject()
                 .put("role", "user")

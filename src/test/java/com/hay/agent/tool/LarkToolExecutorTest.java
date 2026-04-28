@@ -3,6 +3,8 @@ package com.hay.agent.tool;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hay.agent.service.ContentGeneratorService;
+import com.hay.agent.service.presentation.LarkSlideXmlRenderer;
+import com.hay.agent.service.presentation.PresentationMarkdownParser;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
@@ -18,6 +20,8 @@ class LarkToolExecutorTest {
     private final LarkToolExecutor executor = new LarkToolExecutor(
             new ObjectMapper(),
             mock(ContentGeneratorService.class),
+            new PresentationMarkdownParser(),
+            new LarkSlideXmlRenderer(),
             Duration.ofSeconds(1)
     );
 
@@ -40,11 +44,26 @@ class LarkToolExecutorTest {
     }
 
     @Test
-    void buildSlideXmlShouldContainEscapedTitleAndBody() throws Exception {
-        String xml = invokeString("buildSlideXml", new Class<?>[]{String.class, int.class, String.class}, "A & B", 1, "测试标题");
+    void splitPptPagesShouldIgnoreDocumentTitleBeforeSlides() throws Exception {
+        @SuppressWarnings("unchecked")
+        List<String> pages = (List<String>) invoke("splitPptPages", new Class<?>[]{String.class}, "# 产品方案\n\n## 封面\n内容\n\n## 总结\n- B");
 
-        assertTrue(xml.contains("测试标题 - 1"));
+        assertEquals(2, pages.size());
+        assertTrue(pages.get(0).startsWith("## 封面"));
+    }
+
+    @Test
+    void buildSlideXmlShouldContainEscapedTitleAndBody() throws Exception {
+        String xml = invokeString("buildSlideXml", new Class<?>[]{String.class, int.class, String.class}, "## 页面标题\n- A & B", 1, "测试标题");
+
+        assertTrue(xml.contains("测试标题 | 第1页"));
+        assertTrue(xml.contains("<fill><fillColor color=\"rgb(59,130,246)\"/></fill>"));
+        assertTrue(xml.contains("<content textType=\"title\" fontSize=\"36\" color=\"rgb(15,23,42)\" bold=\"true\"><p>页面标题</p></content>"));
         assertTrue(xml.contains("A &amp; B"));
+        assertTrue(xml.contains("<ul><li><p>A &amp; B</p></li></ul>"));
+        assertTrue(!xml.contains("height=\"10\" fillColor="));
+        assertTrue(!xml.contains("height=\"4\" fillColor="));
+        assertTrue(!xml.contains("<p style="));
         assertTrue(xml.startsWith("<slide xmlns=\"http://www.larkoffice.com/sml/2.0\">"));
     }
 
