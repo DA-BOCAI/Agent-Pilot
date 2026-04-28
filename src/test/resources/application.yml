@@ -1,0 +1,5 @@
+agent:
+  lark-im:
+    listener:
+      enabled: false
+
