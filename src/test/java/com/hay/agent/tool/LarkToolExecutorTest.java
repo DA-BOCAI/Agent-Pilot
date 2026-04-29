@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hay.agent.service.ContentGeneratorService;
 import com.hay.agent.service.presentation.LarkSlideXmlRenderer;
 import com.hay.agent.service.presentation.PresentationMarkdownParser;
+import com.hay.agent.service.presentation.PresentationSlide;
+import com.hay.agent.service.presentation.PresentationTheme;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
@@ -71,6 +73,44 @@ class LarkToolExecutorTest {
     void createXmlPresentationParamsShouldBeJsonObject() throws Exception {
         JsonNode params = (JsonNode) invoke("createXmlPresentationParams", new Class<?>[]{String.class}, "abc123");
         assertEquals("abc123", params.get("xml_presentation_id").asText());
+    }
+
+    @Test
+    void resolveThemeShouldPreferPreviewThemeOverInputInference() throws Exception {
+        JsonNode previewData = new ObjectMapper().readTree("""
+                {"theme":"business","slides":[]}
+                """);
+
+        PresentationTheme theme = (PresentationTheme) invoke("resolveTheme", new Class<?>[]{JsonNode.class, String.class, String.class},
+                previewData, "双十一大促PPT", "双十一作战方案");
+
+        assertEquals(PresentationTheme.BUSINESS, theme);
+    }
+
+    @Test
+    void readPreviewSlidesShouldUseStructuredBlocks() throws Exception {
+        JsonNode previewData = new ObjectMapper().readTree("""
+                {
+                  "theme": "business",
+                  "slides": [
+                    {
+                      "slideNo": 1,
+                      "title": "项目目标",
+                      "blocks": [
+                        {"type": "bullets", "items": ["GMV破3亿"], "rows": []}
+                      ]
+                    }
+                  ]
+                }
+                """);
+
+        @SuppressWarnings("unchecked")
+        List<PresentationSlide> slides = (List<PresentationSlide>) invoke("readPreviewSlides", new Class<?>[]{JsonNode.class}, previewData);
+
+        assertEquals(1, slides.size());
+        assertEquals("项目目标", slides.get(0).getTitle());
+        assertEquals("bullets", slides.get(0).getBlocks().get(0).getType());
+        assertEquals("GMV破3亿", slides.get(0).getBlocks().get(0).getItems().get(0));
     }
 
     private Object invoke(String methodName, Class<?>[] paramTypes, Object... args) throws Exception {

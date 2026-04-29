@@ -160,7 +160,7 @@ public class LlmPlanner implements Planner {
                            - lark-im: 对应SEND_IM步骤
                            - none: 其他不需要调用工具的步骤
                         3. 每个步骤对象必须包含 stepId、scene、action、tool、requiresConfirm 5个字段
-                        4. 只要涉及文档/PPT生成、消息发送、结果交付等操作，requiresConfirm必须设为true
+                        4. 只要涉及文档/PPT生成、消息发送、结果交付等真实执行操作，requiresConfirm必须设为true；纯理解、整理、规划或无需外部副作用的步骤必须为false
                         5. 拆解步骤要符合逻辑顺序，比如需要先生成文档内容，再生成PPT，最后通知用户
                         """)
                 ;
@@ -223,6 +223,15 @@ public class LlmPlanner implements Planner {
             }
             if (!StringUtils.hasText(step.getTool())) {
                 step.setTool("none");
+            }
+            if ("none".equals(step.getTool())) {
+                step.setRequiresConfirm(false);
+            }
+            if ("C_DOC".equals(step.getStepId())
+                    || "D_SLIDES".equals(step.getStepId())
+                    || "SEND_IM".equals(step.getStepId())
+                    || "F_DELIVER".equals(step.getStepId())) {
+                step.setRequiresConfirm(true);
             }
             step.setStatus(StepStatus.PENDING);
         }

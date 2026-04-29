@@ -43,7 +43,7 @@ public class AgentTaskService {
     private final ContentPreviewService contentPreviewService;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
-    @Value("${agent.task.auto-run:true}")
+    @Value("${agent.task.auto-run:false}")
     private boolean autoRun;
 
     public AgentTaskService(TaskStore taskStore,
@@ -213,6 +213,8 @@ public class AgentTaskService {
 
         try {
             Object preview = buildPreview(task, step, request);
+            com.fasterxml.jackson.databind.JsonNode previewData = objectMapper.valueToTree(preview);
+            step.setPreviewData(previewData);
             task.getArtifacts().removeIf(artifact -> step.getStepId().equals(artifact.getStepId())
                     && artifact.getType() != null
                     && artifact.getType().endsWith("-preview"));
@@ -221,7 +223,7 @@ public class AgentTaskService {
                     .stepId(step.getStepId())
                     .title("D_SLIDES".equals(step.getStepId()) ? "PPT预览" : "文档预览")
                     .url("preview://" + task.getTaskId() + "/" + step.getStepId())
-                    .previewData(objectMapper.valueToTree(preview))
+                    .previewData(previewData)
                     .build());
 
             step.setStatus(StepStatus.WAIT_CONFIRM);

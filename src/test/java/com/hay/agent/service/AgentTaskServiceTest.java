@@ -117,6 +117,7 @@ class AgentTaskServiceTest {
 
         assertEquals(TaskStatus.WAIT_CONFIRM, task.getStatus());
         assertEquals(StepStatus.WAIT_CONFIRM, task.getPlanSteps().get(0).getStatus());
+        assertEquals("campaign", task.getPlanSteps().get(0).getPreviewData().path("theme").asText());
         assertEquals(1, task.getArtifacts().size());
         assertEquals("slides-preview", task.getArtifacts().get(0).getType());
         assertEquals("campaign", task.getArtifacts().get(0).getPreviewData().path("theme").asText());

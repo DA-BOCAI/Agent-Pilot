@@ -15,7 +15,7 @@ agent:
     redis:
       enabled: ${AGENT_REDIS_ENABLED:true}
   task:
-    auto-run: ${AGENT_TASK_AUTO_RUN:true}
+    auto-run: ${AGENT_TASK_AUTO_RUN:false}
   tool:
     lark-cli-timeout: ${LARK_CLI_TIMEOUT:180s}
 
