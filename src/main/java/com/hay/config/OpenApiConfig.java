@@ -19,6 +19,7 @@ public class OpenApiConfig {
     public OpenAPI agentOpenAPI() {
         return new OpenAPI()
                 .addTagsItem(new Tag().name("任务编排接口").description("用于任务创建、规划、执行、确认和过程追踪"))
+                .addTagsItem(new Tag().name("飞书卡片回调接口").description("用于接收飞书消息卡片按钮回调"))
                 .info(new Info()
                 .title("AgentCopilot 任务编排接口文档")
                 .description("用于飞书赛题的任务创建、规划、执行、确认与事件追踪")
@@ -37,6 +38,8 @@ public class OpenApiConfig {
             updatePost(openApi, "/api/v1/tasks/{taskId}/plan", "生成规划", "为指定任务生成可执行步骤清单");
             updatePost(openApi, "/api/v1/tasks/{taskId}/execute", "执行任务", "从当前进度继续执行，直到完成或遇到下一个确认闸门");
             updatePost(openApi, "/api/v1/tasks/{taskId}/confirm", "确认步骤", "对需要人工确认的步骤进行通过或拒绝");
+            updatePost(openApi, "/api/v1/tasks/{taskId}/confirm-and-run", "确认并继续推进", "确认当前步骤后，由 Agent Runner 自动推进到完成或下一个确认闸门");
+            updatePost(openApi, "/api/v1/lark/cards/callback", "处理飞书消息卡片回调", "用于确认、取消、跳转工作台等消息卡片交互");
             updateGet(openApi, "/api/v1/tasks/{taskId}", "查询任务详情", "返回任务状态、步骤、产物和事件信息");
             updateGet(openApi, "/api/v1/tasks/{taskId}/events", "查询任务事件", "返回任务执行过程中的完整事件时间线");
         };
@@ -48,7 +51,9 @@ public class OpenApiConfig {
         }
         openApi.getPaths().get(path).getPost().setSummary(summary);
         openApi.getPaths().get(path).getPost().setDescription(description);
-        openApi.getPaths().get(path).getPost().setTags(java.util.List.of("任务编排接口"));
+        openApi.getPaths().get(path).getPost().setTags(java.util.List.of(path.startsWith("/api/v1/lark/")
+                ? "飞书卡片回调接口"
+                : "任务编排接口"));
     }
 
     private void updateGet(OpenAPI openApi, String path, String summary, String description) {

@@ -206,6 +206,29 @@ public class AgentTaskService {
     }
 
     /**
+     * 取消任务。用于飞书卡片或前端在尚未交付前终止任务。
+     */
+    public AgentTask cancelTask(String taskId, String reason) {
+        AgentTask task = getTask(taskId);
+        if (task.getStatus() == TaskStatus.DELIVERED || task.getStatus() == TaskStatus.FAILED) {
+            return task;
+        }
+
+        task.getPlanSteps().stream()
+                .filter(step -> step.getStatus() == StepStatus.WAIT_CONFIRM
+                        || step.getStatus() == StepStatus.RUNNING
+                        || step.getStatus() == StepStatus.APPROVED)
+                .findFirst()
+                .ifPresent(step -> step.setStatus(StepStatus.SKIPPED));
+        task.setStatus(TaskStatus.FAILED);
+        task.setNextAction("none");
+        addEvent(task, "TASK_CANCELLED",
+                reason == null || reason.isBlank() ? "任务已由用户取消" : reason,
+                Map.of("source", "lark_card"));
+        return save(task);
+    }
+
+    /**
      * 为指定步骤生成预览产物。用于 confirm1 之后、正式创建飞书产物之前的 confirm2。
      */
     public AgentTask generateStepPreview(String taskId, String stepId, GenerateStepPreviewRequest request) {

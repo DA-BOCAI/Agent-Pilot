@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
@@ -34,6 +35,7 @@ public class LarkImEventListener {
 
     private final AgentTaskService agentTaskService;
     private final AgentRunner agentRunner;
+    private final LarkTaskCardService larkTaskCardService;
     private final ObjectMapper objectMapper;
     private final Map<String, Instant> processedMessageIds = new ConcurrentHashMap<>();
 
@@ -176,7 +178,10 @@ public class LarkImEventListener {
         request.setRequestId(messageId);
 
         AgentTask task = agentTaskService.createTask(request);
-        agentRunner.runAsync(task.getTaskId());
+        CompletableFuture.runAsync(() -> {
+            AgentTask advancedTask = agentRunner.runUntilBlocked(task.getTaskId());
+            larkTaskCardService.sendCardsForCurrentState(chatId, advancedTask);
+        });
         log.info("飞书 IM 消息已创建任务，taskId={}，chatId={}，chatType={}", task.getTaskId(), chatId, chatType);
         return task;
     }

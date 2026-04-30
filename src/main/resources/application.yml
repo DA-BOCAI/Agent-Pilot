@@ -12,14 +12,18 @@ server:
 
 agent:
   im:
-    lark-cli-command: ${LARK_CLI_COMMAND:lark-cli}
+    lark-cli-command: ${LARK_CLI_COMMAND:C:\Users\Swiftie\AppData\Roaming\npm\lark-cli.cmd}
+    lark-cli-run-js: ${LARK_CLI_RUN_JS:C:\Users\Swiftie\AppData\Roaming\npm\node_modules\@larksuite\cli\scripts\run.js}
     bot-open-id: ${LARK_BOT_OPEN_ID:}
     bot-user-id: ${LARK_BOT_USER_ID:}
     group-requires-mention: ${AGENT_IM_GROUP_REQUIRES_MENTION:true}
+    workspace-url: ${AGENT_WORKSPACE_URL:https://agent-pilot-nine.vercel.app}
+    cards:
+      enabled: ${AGENT_IM_CARDS_ENABLED:true}
     reply:
       enabled: ${AGENT_IM_REPLY_ENABLED:true}
     listener:
-      enabled: ${AGENT_IM_LISTENER_ENABLED:false}
+      enabled: ${AGENT_IM_LISTENER_ENABLED:true}
   store:
     redis:
       enabled: ${AGENT_REDIS_ENABLED:true}
