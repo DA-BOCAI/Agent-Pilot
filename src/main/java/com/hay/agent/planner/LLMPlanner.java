@@ -166,7 +166,17 @@ public class LlmPlanner implements Planner {
                 ;
         messages.addObject()
                 .put("role", "user")
-                .put("content", inputText);
+                .put("content", """
+                        规划策略补充：
+                        - 当任务不是极简单步操作时，优先把 A_CAPTURE 和 B_PLAN 作为前两个无外部副作用步骤。
+                        - A_CAPTURE 表示理解并标准化用户意图，tool 必须为 none，requiresConfirm 必须为 false。
+                        - B_PLAN 表示整理执行计划，tool 必须为 none，requiresConfirm 必须为 false。
+                        - C_DOC 和 D_SLIDES 会创建飞书产物，因此可以要求确认。
+                        - SEND_IM 和 F_DELIVER 会发送或交付结果，因此必须要求确认。
+                        - 禁止把所有步骤都设为 requiresConfirm=true，只有存在外部副作用的步骤才需要确认。
+
+                        用户请求：
+                        """ + inputText);
 
         return root;
     }
@@ -224,7 +234,9 @@ public class LlmPlanner implements Planner {
             if (!StringUtils.hasText(step.getTool())) {
                 step.setTool("none");
             }
-            if ("none".equals(step.getTool())) {
+            if ("none".equals(step.getTool())
+                    || "A_CAPTURE".equals(step.getStepId())
+                    || "B_PLAN".equals(step.getStepId())) {
                 step.setRequiresConfirm(false);
             }
             if ("C_DOC".equals(step.getStepId())

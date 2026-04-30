@@ -11,6 +11,15 @@ server:
   port: 8080
 
 agent:
+  im:
+    lark-cli-command: ${LARK_CLI_COMMAND:lark-cli}
+    bot-open-id: ${LARK_BOT_OPEN_ID:}
+    bot-user-id: ${LARK_BOT_USER_ID:}
+    group-requires-mention: ${AGENT_IM_GROUP_REQUIRES_MENTION:true}
+    reply:
+      enabled: ${AGENT_IM_REPLY_ENABLED:true}
+    listener:
+      enabled: ${AGENT_IM_LISTENER_ENABLED:false}
   store:
     redis:
       enabled: ${AGENT_REDIS_ENABLED:true}

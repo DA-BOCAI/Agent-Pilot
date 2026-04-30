@@ -60,8 +60,8 @@ public class LarkToolExecutor implements ToolExecutor {
     public Optional<Artifact> execute(PlanStep step, String taskId, String inputText) {
         log.info("开始执行任务：{}，输入：{}", step.getStepId(), inputText);
         return switch (step.getStepId()) {
-            case "C_DOC" -> createLarkDoc(taskId, inputText); // 创建飞书文档
-            case "D_SLIDES" -> createLarkSlides(taskId, inputText); // 创建飞书演示文稿
+            case "C_DOC" -> createLarkDoc(step, taskId, inputText); // 创建飞书文档
+            case "D_SLIDES" -> createLarkSlides(step, taskId, inputText); // 创建飞书演示文稿
             case "SEND_IM" -> sendLarkIm(taskId, inputText); // 发送飞书消息
             case "F_DELIVER" -> deliverResult(taskId); // 交付最终结果
             default -> Optional.empty();
@@ -71,10 +71,10 @@ public class LarkToolExecutor implements ToolExecutor {
     /**
      * 创建飞书文档
      */
-    private Optional<Artifact> createLarkDoc(String taskId, String inputText) {
+    private Optional<Artifact> createLarkDoc(PlanStep step, String taskId, String inputText) {
         try {
-            // 调用大模型生成完整文档内容
-            String content = contentGeneratorService.generateDocContent(inputText, "需求文档");
+            String content = readPreviewRawMarkdown(step.getPreviewData())
+                    .orElseGet(() -> contentGeneratorService.generateDocContent(inputText, "需求文档"));
             if (content == null || content.trim().isEmpty()) {
                 throw new RuntimeException("调用的内容生成为空，无法创建飞书文档");
             }
@@ -109,20 +109,29 @@ public class LarkToolExecutor implements ToolExecutor {
     /**
      * 创建飞书演示文稿（PPT）
      */
-    private Optional<Artifact> createLarkSlides(String taskId, String inputText) {
+    private Optional<Artifact> createLarkSlides(PlanStep step, String taskId, String inputText) {
         try {
-            // 调用大模型生成PPT内容
             String fallbackTitle = "【" + taskId + "】演示文稿";
-            String pptContent = contentGeneratorService.generatePptContent(inputText, fallbackTitle);
-            if (pptContent == null || pptContent.trim().isEmpty()) {
+            JsonNode previewData = step.getPreviewData();
+            boolean usePreviewSlides = hasPreviewSlides(previewData);
+            String pptContent = readPreviewRawMarkdown(previewData).orElse(null);
+            if (!usePreviewSlides && (pptContent == null || pptContent.trim().isEmpty())) {
+                pptContent = contentGeneratorService.generatePptContent(inputText, fallbackTitle);
+            }
+            if ((pptContent == null || pptContent.trim().isEmpty()) && !hasPreviewSlides(previewData)) {
                 throw new RuntimeException("调用的PPT内容生成为空，无法创建幻灯片");
             }
 
-            String title = resolveMarkdownTitle(pptContent, fallbackTitle);
-            log.info("【PPT调试】开始创建飞书演示文稿，真实标题：{}，内容长度：{}", title, pptContent.length());
+            String title = readPreviewTitle(previewData).orElse(null);
+            if (title == null || title.isBlank()) {
+                title = resolveMarkdownTitle(pptContent, fallbackTitle);
+            }
+            log.info("【PPT调试】开始创建飞书演示文稿，真实标题：{}，内容长度：{}", title, pptContent == null ? 0 : pptContent.length());
 
-            PresentationTheme theme = PresentationTheme.fromText(inputText + "\n" + title);
-            List<PresentationSlide> slides = presentationMarkdownParser.parse(pptContent, title);
+            PresentationTheme theme = resolveTheme(previewData, inputText, title);
+            List<PresentationSlide> slides = usePreviewSlides
+                    ? readPreviewSlides(previewData)
+                    : presentationMarkdownParser.parse(pptContent, title);
 
             if (slides.size() > 10) {
                 throw new IllegalStateException("PPT页数超过Lark CLI单次创建上限10页，当前页数=" + slides.size() + "，请先缩减内容或后续拆分创建");
@@ -486,6 +495,92 @@ public class LarkToolExecutor implements ToolExecutor {
     private JsonNode createSlideData(String slideXml) {
         return objectMapper.createObjectNode()
                 .set("slide", objectMapper.createObjectNode().put("content", slideXml));
+    }
+
+    private Optional<String> readPreviewRawMarkdown(JsonNode previewData) {
+        if (previewData == null || previewData.isMissingNode() || previewData.isNull()) {
+            return Optional.empty();
+        }
+        String rawMarkdown = previewData.path("rawMarkdown").asText("");
+        return rawMarkdown.isBlank() ? Optional.empty() : Optional.of(rawMarkdown);
+    }
+
+    private Optional<String> readPreviewTitle(JsonNode previewData) {
+        if (previewData == null || previewData.isMissingNode() || previewData.isNull()) {
+            return Optional.empty();
+        }
+        String title = previewData.path("title").asText("");
+        return title.isBlank() ? Optional.empty() : Optional.of(title);
+    }
+
+    private PresentationTheme resolveTheme(JsonNode previewData, String inputText, String title) {
+        if (previewData != null && !previewData.isMissingNode() && !previewData.isNull()) {
+            String theme = previewData.path("theme").asText("");
+            if (!theme.isBlank()) {
+                return PresentationTheme.fromText(theme);
+            }
+        }
+        return PresentationTheme.fromText(inputText + "\n" + title);
+    }
+
+    private boolean hasPreviewSlides(JsonNode previewData) {
+        return previewData != null
+                && !previewData.isMissingNode()
+                && !previewData.isNull()
+                && previewData.path("slides").isArray()
+                && !previewData.path("slides").isEmpty();
+    }
+
+    private List<PresentationSlide> readPreviewSlides(JsonNode previewData) {
+        List<PresentationSlide> slides = new ArrayList<>();
+        JsonNode slideNodes = previewData.path("slides");
+        for (int i = 0; i < slideNodes.size(); i++) {
+            JsonNode slideNode = slideNodes.get(i);
+            slides.add(PresentationSlide.builder()
+                    .slideNo(slideNode.path("slideNo").asInt(i + 1))
+                    .title(slideNode.path("title").asText("第" + (i + 1) + "页"))
+                    .blocks(readPreviewBlocks(slideNode.path("blocks")))
+                    .build());
+        }
+        return slides;
+    }
+
+    private List<PresentationSlide.SlideBlock> readPreviewBlocks(JsonNode blockNodes) {
+        if (blockNodes == null || !blockNodes.isArray() || blockNodes.isEmpty()) {
+            return List.of();
+        }
+        List<PresentationSlide.SlideBlock> blocks = new ArrayList<>();
+        for (JsonNode blockNode : blockNodes) {
+            blocks.add(PresentationSlide.SlideBlock.builder()
+                    .type(blockNode.path("type").asText("paragraph"))
+                    .text(blockNode.path("text").asText(null))
+                    .items(readStringList(blockNode.path("items")))
+                    .rows(readStringRows(blockNode.path("rows")))
+                    .build());
+        }
+        return blocks;
+    }
+
+    private List<String> readStringList(JsonNode node) {
+        if (node == null || !node.isArray()) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        for (JsonNode item : node) {
+            values.add(item.asText(""));
+        }
+        return values;
+    }
+
+    private List<List<String>> readStringRows(JsonNode node) {
+        if (node == null || !node.isArray()) {
+            return List.of();
+        }
+        List<List<String>> rows = new ArrayList<>();
+        for (JsonNode rowNode : node) {
+            rows.add(readStringList(rowNode));
+        }
+        return rows;
     }
 
     private String escapeCliJsonArgument(JsonNode jsonNode) throws Exception {

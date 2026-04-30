@@ -3,8 +3,10 @@ package com.hay.agent.service;
 import com.hay.agent.api.dto.ConfirmTaskRequest;
 import com.hay.agent.api.dto.CreateTaskRequest;
 import com.hay.agent.api.dto.GenerateStepPreviewRequest;
-import com.hay.agent.api.dto.preview.DocumentPreviewRequest;
-import com.hay.agent.api.dto.preview.PresentationPreviewRequest;
+import com.hay.agent.api.dto.RefineStepPreviewRequest;
+import com.hay.agent.api.dto.UpdateStepPreviewRequest;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.hay.agent.domain.AgentTask;
 import com.hay.agent.domain.Artifact;
 import com.hay.agent.domain.PlanStep;
@@ -12,6 +14,7 @@ import com.hay.agent.domain.StepStatus;
 import com.hay.agent.domain.TaskEvent;
 import com.hay.agent.domain.TaskStatus;
 import com.hay.agent.planner.Planner;
+import com.hay.agent.service.preview.StepPreviewGenerator;
 import com.hay.agent.store.TaskStore;
 import com.hay.agent.tool.ToolExecutor;
 import org.springframework.http.HttpStatus;
@@ -27,6 +30,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 文件作用：任务编排核心服务（业务层）。
@@ -40,7 +45,8 @@ public class AgentTaskService {
     private final TaskStore taskStore;
     private final Planner planner;
     private final ToolExecutor toolExecutor;
-    private final ContentPreviewService contentPreviewService;
+    private final List<StepPreviewGenerator> stepPreviewGenerators;
+    private final PreviewRefinementService previewRefinementService;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @Value("${agent.task.auto-run:false}")
@@ -49,12 +55,14 @@ public class AgentTaskService {
     public AgentTaskService(TaskStore taskStore,
                             Planner planner,
                             ToolExecutor toolExecutor,
-                            ContentPreviewService contentPreviewService,
+                            List<StepPreviewGenerator> stepPreviewGenerators,
+                            PreviewRefinementService previewRefinementService,
                             com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
         this.taskStore = taskStore;
         this.planner = planner;
         this.toolExecutor = toolExecutor;
-        this.contentPreviewService = contentPreviewService;
+        this.stepPreviewGenerators = stepPreviewGenerators;
+        this.previewRefinementService = previewRefinementService;
         this.objectMapper = objectMapper;
     }
 
@@ -147,7 +155,7 @@ public class AgentTaskService {
     public AgentTask planTask(String taskId) {
         AgentTask task = getTask(taskId);
         if (task.getStatus() != TaskStatus.CREATED) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Task must be in CREATED status before planning");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "任务必须处于 CREATED 状态才能生成规划");
         }
 
         // 规划步骤由 Planner 抽象提供：当前是 Mock，后续可平滑替换为大模型规划结果。
@@ -207,53 +215,164 @@ public class AgentTaskService {
                 .findFirst()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Step not found"));
 
-        if (!"C_DOC".equals(step.getStepId()) && !"D_SLIDES".equals(step.getStepId())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only document and slides steps support preview");
-        }
+        StepPreviewGenerator generator = findPreviewGenerator(step);
 
         try {
-            Object preview = buildPreview(task, step, request);
-            com.fasterxml.jackson.databind.JsonNode previewData = objectMapper.valueToTree(preview);
+            Object preview = generator.generate(task, step, request);
+            JsonNode previewData = objectMapper.valueToTree(preview);
             step.setPreviewData(previewData);
-            task.getArtifacts().removeIf(artifact -> step.getStepId().equals(artifact.getStepId())
-                    && artifact.getType() != null
-                    && artifact.getType().endsWith("-preview"));
-            task.getArtifacts().add(Artifact.builder()
-                    .type("D_SLIDES".equals(step.getStepId()) ? "slides-preview" : "docs-preview")
-                    .stepId(step.getStepId())
-                    .title("D_SLIDES".equals(step.getStepId()) ? "PPT预览" : "文档预览")
-                    .url("preview://" + task.getTaskId() + "/" + step.getStepId())
-                    .previewData(previewData)
-                    .build());
+            replacePreviewArtifact(task, step, generator.previewArtifactType(), generator.previewTitle(), previewData);
 
             step.setStatus(StepStatus.WAIT_CONFIRM);
             task.setStatus(TaskStatus.WAIT_CONFIRM);
             task.setNextAction("confirm:" + step.getStepId());
-            addEvent(task, "STEP_PREVIEW_READY", "Step preview generated",
-                    Map.of("stepId", step.getStepId(), "artifactType", "D_SLIDES".equals(step.getStepId()) ? "slides-preview" : "docs-preview"));
+            addEvent(task, "STEP_PREVIEW_READY", "步骤预览已生成",
+                    Map.of("stepId", step.getStepId(), "artifactType", generator.previewArtifactType()));
             return save(task);
         } catch (Exception e) {
             step.setStatus(StepStatus.FAILED);
             task.setStatus(TaskStatus.FAILED);
             task.setNextAction("none");
-            addEvent(task, "STEP_PREVIEW_FAILED", "Step preview failed: " + e.getMessage(), Map.of("stepId", step.getStepId()));
+            addEvent(task, "STEP_PREVIEW_FAILED", "步骤预览生成失败：" + e.getMessage(), Map.of("stepId", step.getStepId()));
             save(task);
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Generate preview failed: " + e.getMessage(), e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "生成预览失败：" + e.getMessage(), e);
         }
     }
 
-    private Object buildPreview(AgentTask task, PlanStep step, GenerateStepPreviewRequest request) {
-        if ("D_SLIDES".equals(step.getStepId())) {
-            return contentPreviewService.previewPresentation(PresentationPreviewRequest.builder()
-                    .userInput(task.getInputText())
-                    .topic(step.getAction())
-                    .theme(request == null ? null : request.getTheme())
-                    .build());
+    /**
+     * 保存卡片2/详情页编辑后的结构化预览数据，供 confirm2 后的正式创建复用。
+     */
+    public AgentTask updateStepPreview(String taskId, String stepId, UpdateStepPreviewRequest request) {
+        AgentTask task = getTask(taskId);
+        PlanStep step = task.getPlanSteps().stream()
+                .filter(s -> s.getStepId().equals(stepId))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Step not found"));
+        StepPreviewGenerator generator = findPreviewGenerator(step);
+
+        if (request == null || request.getPreviewData() == null || !request.getPreviewData().isObject()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "previewData 必须是 JSON 对象");
         }
-        return contentPreviewService.previewDocument(DocumentPreviewRequest.builder()
-                .userInput(task.getInputText())
-                .docType(step.getAction())
+
+        ObjectNode previewData = request.getPreviewData().deepCopy();
+        normalizeAndValidatePreviewData(step, generator, previewData);
+        step.setPreviewData(previewData);
+        replacePreviewArtifact(task, step, generator.previewArtifactType(), readPreviewTitle(previewData, generator.previewTitle()), previewData);
+
+        step.setStatus(StepStatus.WAIT_CONFIRM);
+        task.setStatus(TaskStatus.WAIT_CONFIRM);
+        task.setNextAction("confirm:" + step.getStepId());
+        addEvent(task, "STEP_PREVIEW_UPDATED", "用户已更新步骤预览",
+                Map.of("stepId", step.getStepId(), "artifactType", generator.previewArtifactType()));
+        return save(task);
+    }
+
+    /**
+     * 自然语言精修入口。优先调用大模型生成新的结构化预览数据；
+     * 大模型不可用或输出无效时，降级为确定性轻量规则修改。
+     */
+    public AgentTask refineStepPreview(String taskId, String stepId, RefineStepPreviewRequest request) {
+        AgentTask task = getTask(taskId);
+        PlanStep step = task.getPlanSteps().stream()
+                .filter(s -> s.getStepId().equals(stepId))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Step not found"));
+        StepPreviewGenerator generator = findPreviewGenerator(step);
+
+        if (step.getPreviewData() == null || !step.getPreviewData().isObject()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请先生成预览，再进行精修");
+        }
+        if (request == null || request.getInstruction() == null || request.getInstruction().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "精修指令不能为空");
+        }
+
+        ObjectNode previewData = previewRefinementService
+                .refine(step.getPreviewData(), request.getInstruction(), generator.expectedPreviewDataType())
+                .filter(JsonNode::isObject)
+                .map(refined -> (ObjectNode) refined.deepCopy())
+                .orElseGet(() -> {
+                    ObjectNode fallbackPreviewData = step.getPreviewData().deepCopy();
+                    applyPreviewInstruction(fallbackPreviewData, request.getInstruction());
+                    return fallbackPreviewData;
+                });
+        normalizeAndValidatePreviewData(step, generator, previewData);
+        step.setPreviewData(previewData);
+        replacePreviewArtifact(task, step, generator.previewArtifactType(), readPreviewTitle(previewData, generator.previewTitle()), previewData);
+
+        step.setStatus(StepStatus.WAIT_CONFIRM);
+        task.setStatus(TaskStatus.WAIT_CONFIRM);
+        task.setNextAction("confirm:" + step.getStepId());
+        addEvent(task, "STEP_PREVIEW_REFINED", "步骤预览已按自然语言指令精修",
+                Map.of("stepId", step.getStepId(), "artifactType", generator.previewArtifactType()));
+        return save(task);
+    }
+
+    private StepPreviewGenerator findPreviewGenerator(PlanStep step) {
+        return stepPreviewGenerators.stream()
+                .filter(generator -> generator.supports(step))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前仅文档和 PPT 步骤支持预览"));
+    }
+
+    private void replacePreviewArtifact(AgentTask task, PlanStep step, String artifactType, String title, JsonNode previewData) {
+        task.getArtifacts().removeIf(artifact -> step.getStepId().equals(artifact.getStepId())
+                && artifact.getType() != null
+                && artifact.getType().endsWith("-preview"));
+        task.getArtifacts().add(Artifact.builder()
+                .type(artifactType)
+                .stepId(step.getStepId())
+                .title(title)
+                .url("preview://" + task.getTaskId() + "/" + step.getStepId())
+                .previewData(previewData)
                 .build());
+    }
+
+    private void normalizeAndValidatePreviewData(PlanStep step, StepPreviewGenerator generator, ObjectNode previewData) {
+        String artifactType = previewData.path("artifactType").asText("");
+        if (!artifactType.isBlank() && !generator.expectedPreviewDataType().equals(artifactType)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "previewData 的 artifactType 必须是 " + generator.expectedPreviewDataType());
+        }
+        previewData.put("artifactType", generator.expectedPreviewDataType());
+
+        if ("D_SLIDES".equals(step.getStepId()) && previewData.path("theme").asText("").isBlank()) {
+            String previousTheme = step.getPreviewData() == null ? "" : step.getPreviewData().path("theme").asText("");
+            previewData.put("theme", previousTheme.isBlank() ? "business" : previousTheme);
+        }
+    }
+
+    private String readPreviewTitle(JsonNode previewData, String fallback) {
+        String title = previewData == null ? "" : previewData.path("title").asText("");
+        return title.isBlank() ? fallback : title;
+    }
+
+    private void applyPreviewInstruction(ObjectNode previewData, String instruction) {
+        String lower = instruction.toLowerCase();
+        if (containsAny(lower, "business", "商务", "稳重", "正式")) {
+            previewData.put("theme", "business");
+        } else if (containsAny(lower, "tech", "科技", "蓝色", "技术")) {
+            previewData.put("theme", "tech");
+        } else if (containsAny(lower, "campaign", "营销", "大促", "红色", "活动")) {
+            previewData.put("theme", "campaign");
+        } else if (containsAny(lower, "minimal", "极简", "简洁", "清爽")) {
+            previewData.put("theme", "minimal");
+        }
+
+        Matcher titleMatcher = Pattern.compile("(?:标题|主题|命名|改名|title)[为成叫：: ]+([^，。\\n]+)").matcher(instruction);
+        if (titleMatcher.find()) {
+            previewData.put("title", titleMatcher.group(1).trim());
+        }
+
+        previewData.put("lastRefineInstruction", instruction);
+    }
+
+    private boolean containsAny(String text, String... keywords) {
+        for (String keyword : keywords) {
+            if (text.contains(keyword.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -264,7 +383,7 @@ public class AgentTaskService {
     public AgentTask executeTask(String taskId) {
         AgentTask task = getTask(taskId);
         if (task.getStatus() == TaskStatus.CREATED) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Plan must be generated before execution");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "执行任务前必须先生成规划");
         }
         if (task.getStatus() == TaskStatus.DELIVERED || task.getStatus() == TaskStatus.FAILED) {
             return task;
