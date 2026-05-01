@@ -184,33 +184,8 @@ public class LarkToolExecutor implements ToolExecutor {
      * 发送飞书消息
      */
     private Optional<Artifact> sendLarkIm(String taskId, String inputText) {
-        try {
-            log.info("开始发送飞书消息，taskId={}，内容：{}", taskId, inputText);
-
-            JsonNode resultJson = executeCliJson(List.of(
-                    LARK_CLI_PATH,
-                    "im", "+send",
-                    "--content", inputText,
-                    "--as", "bot"
-            ), "发送飞书消息");
-            
-            if (resultJson.get("ok").asBoolean()) {
-                String messageId = resultJson.at("/data/message_id").asText();
-                log.info("发送飞书消息成功，消息ID：{}", messageId);
-
-                return Optional.of(Artifact.builder()
-                        .type("im")
-                        .title("飞书消息")
-                        .url("lark://message/" + messageId)
-                        .build());
-            } else {
-                throw new RuntimeException("发送消息失败：" + resultJson.at("/error/message").asText());
-            }
-
-        } catch (Exception e) {
-            log.error("发送飞书消息失败，直接抛出，停止降级到 Mock", e);
-            throw new IllegalStateException("发送飞书消息失败：" + e.getMessage(), e);
-        }
+        log.info("SEND_IM 已由任务卡片链路承载通知，跳过额外 IM CLI 发送，taskId={}", taskId);
+        return Optional.empty();
     }
 
     /**

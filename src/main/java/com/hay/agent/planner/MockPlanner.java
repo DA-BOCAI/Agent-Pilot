@@ -54,7 +54,7 @@ public class MockPlanner implements Planner {
                         .scene("F")
                         .action("发布并输出交付结果")
                         .tool("lark-task")
-                        .requiresConfirm(true)
+                        .requiresConfirm(false)
                         .status(StepStatus.PENDING)
                         .build()
         );

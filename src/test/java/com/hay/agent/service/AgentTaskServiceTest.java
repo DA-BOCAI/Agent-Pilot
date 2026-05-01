@@ -55,11 +55,11 @@ class AgentTaskServiceTest {
     private PreviewRefinementService previewRefinementService;
 
     @Test
-    void shouldRunTaskLifecycleWithTwoConfirmations() {
+    void shouldRunTaskLifecycleWithoutConfirmingNotificationAndDeliverySteps() {
         when(planner.plan(anyString())).thenReturn(List.of(
                 PlanStep.builder().stepId("A_CAPTURE").scene("A").action("接收并标准化用户意图").tool("none").requiresConfirm(false).status(StepStatus.PENDING).build(),
                 PlanStep.builder().stepId("C_DOC").scene("C").action("生成需求文档初稿").tool("lark-doc").requiresConfirm(true).status(StepStatus.PENDING).build(),
-                PlanStep.builder().stepId("D_SLIDES").scene("D").action("生成演示文稿").tool("lark-slides").requiresConfirm(false).status(StepStatus.PENDING).build(),
+                PlanStep.builder().stepId("SEND_IM").scene("F").action("发送飞书消息告知用户文档已生成").tool("lark-im").requiresConfirm(true).status(StepStatus.PENDING).build(),
                 PlanStep.builder().stepId("F_DELIVER").scene("F").action("发布并输出交付结果").tool("lark-task").requiresConfirm(true).status(StepStatus.PENDING).build()
         ));
         when(toolExecutor.execute(any(), anyString(), anyString())).thenReturn(Optional.empty());
@@ -74,6 +74,8 @@ class AgentTaskServiceTest {
 
         task = agentTaskService.planTask(task.getTaskId());
         assertEquals(TaskStatus.PLANNED, task.getStatus());
+        assertEquals(false, task.getPlanSteps().get(2).isRequiresConfirm());
+        assertEquals(false, task.getPlanSteps().get(3).isRequiresConfirm());
 
         task = agentTaskService.executeTask(task.getTaskId());
         assertEquals(TaskStatus.WAIT_CONFIRM, task.getStatus());
@@ -83,14 +85,6 @@ class AgentTaskServiceTest {
         confirmDoc.setApproved(true);
         task = agentTaskService.confirmStep(task.getTaskId(), confirmDoc);
         assertEquals(TaskStatus.PLANNED, task.getStatus());
-
-        task = agentTaskService.executeTask(task.getTaskId());
-        assertEquals(TaskStatus.WAIT_CONFIRM, task.getStatus());
-
-        ConfirmTaskRequest confirmDeliver = new ConfirmTaskRequest();
-        confirmDeliver.setStepId("F_DELIVER");
-        confirmDeliver.setApproved(true);
-        task = agentTaskService.confirmStep(task.getTaskId(), confirmDeliver);
 
         task = agentTaskService.executeTask(task.getTaskId());
         assertEquals(TaskStatus.DELIVERED, task.getStatus());

@@ -160,7 +160,7 @@ public class LlmPlanner implements Planner {
                            - lark-im: 对应SEND_IM步骤
                            - none: 其他不需要调用工具的步骤
                         3. 每个步骤对象必须包含 stepId、scene、action、tool、requiresConfirm 5个字段
-                        4. 只要涉及文档/PPT生成、消息发送、结果交付等真实执行操作，requiresConfirm必须设为true；纯理解、整理、规划或无需外部副作用的步骤必须为false
+                        4. 只有 C_DOC 和 D_SLIDES 允许 requiresConfirm=true，用于进入 confirm1/confirm2 双确认链路；A_CAPTURE、B_PLAN、SEND_IM、F_DELIVER 必须为 false
                         5. 拆解步骤要符合逻辑顺序，比如需要先生成文档内容，再生成PPT，最后通知用户
                         """)
                 ;
@@ -171,9 +171,9 @@ public class LlmPlanner implements Planner {
                         - 当任务不是极简单步操作时，优先把 A_CAPTURE 和 B_PLAN 作为前两个无外部副作用步骤。
                         - A_CAPTURE 表示理解并标准化用户意图，tool 必须为 none，requiresConfirm 必须为 false。
                         - B_PLAN 表示整理执行计划，tool 必须为 none，requiresConfirm 必须为 false。
-                        - C_DOC 和 D_SLIDES 会创建飞书产物，因此可以要求确认。
-                        - SEND_IM 和 F_DELIVER 会发送或交付结果，因此必须要求确认。
-                        - 禁止把所有步骤都设为 requiresConfirm=true，只有存在外部副作用的步骤才需要确认。
+                        - C_DOC 和 D_SLIDES 会创建飞书产物，必须进入 confirm1/confirm2 双确认链路，因此 requiresConfirm 必须为 true。
+                        - SEND_IM 是 Agent 在产物创建后的自动通知动作，F_DELIVER 是内部交付收尾动作，二者必须 requiresConfirm=false，禁止产生第三次确认。
+                        - 禁止把所有步骤都设为 requiresConfirm=true，确认闸门只用于文档/PPT等用户需要预览和最终确认的产物步骤。
 
                         用户请求：
                         """ + inputText);
@@ -239,10 +239,11 @@ public class LlmPlanner implements Planner {
                     || "B_PLAN".equals(step.getStepId())) {
                 step.setRequiresConfirm(false);
             }
+            if ("SEND_IM".equals(step.getStepId()) || "F_DELIVER".equals(step.getStepId())) {
+                step.setRequiresConfirm(false);
+            }
             if ("C_DOC".equals(step.getStepId())
-                    || "D_SLIDES".equals(step.getStepId())
-                    || "SEND_IM".equals(step.getStepId())
-                    || "F_DELIVER".equals(step.getStepId())) {
+                    || "D_SLIDES".equals(step.getStepId())) {
                 step.setRequiresConfirm(true);
             }
             step.setStatus(StepStatus.PENDING);

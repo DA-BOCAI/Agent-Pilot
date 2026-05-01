@@ -137,15 +137,25 @@ public class TaskMapper {
 
     private String readArtifactType(PlanStep step) {
         if (step.getPreviewData() != null && step.getPreviewData().hasNonNull("artifactType")) {
-            return step.getPreviewData().path("artifactType").asText();
+            return displayArtifactType(step.getPreviewData().path("artifactType").asText());
         }
         if ("D_SLIDES".equals(step.getStepId())) {
-            return "PRESENTATION";
+            return "PPT";
         }
         if ("C_DOC".equals(step.getStepId())) {
-            return "DOCUMENT";
+            return "文档";
         }
         return null;
+    }
+
+    private String displayArtifactType(String artifactType) {
+        if ("PRESENTATION".equalsIgnoreCase(artifactType) || "slides-preview".equalsIgnoreCase(artifactType)) {
+            return "PPT";
+        }
+        if ("DOCUMENT".equalsIgnoreCase(artifactType) || "docs-preview".equalsIgnoreCase(artifactType)) {
+            return "文档";
+        }
+        return artifactType;
     }
 
     private boolean isPreviewArtifact(Artifact artifact) {

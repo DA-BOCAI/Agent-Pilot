@@ -160,6 +160,7 @@ public class AgentTaskService {
 
         // 规划步骤由 Planner 抽象提供：当前是 Mock，后续可平滑替换为大模型规划结果。
         List<PlanStep> steps = planner.plan(task.getInputText());
+        steps.forEach(this::normalizeConfirmPolicy);
         task.setPlanSteps(steps);
         task.setStatus(TaskStatus.PLANNED);
         task.setNextAction("execute");
@@ -337,6 +338,17 @@ public class AgentTaskService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "当前仅文档和 PPT 步骤支持预览"));
     }
 
+    private void normalizeConfirmPolicy(PlanStep step) {
+        if (step == null) {
+            return;
+        }
+        if ("C_DOC".equals(step.getStepId()) || "D_SLIDES".equals(step.getStepId())) {
+            step.setRequiresConfirm(true);
+            return;
+        }
+        step.setRequiresConfirm(false);
+    }
+
     private void replacePreviewArtifact(AgentTask task, PlanStep step, String artifactType, String title, JsonNode previewData) {
         task.getArtifacts().removeIf(artifact -> step.getStepId().equals(artifact.getStepId())
                 && artifact.getType() != null
@@ -461,6 +473,15 @@ public class AgentTaskService {
      */
     public List<TaskEvent> listEvents(String taskId) {
         return getTask(taskId).getEvents();
+    }
+
+    public AgentTask recordCardMessageId(String taskId, String cardKey, String messageId) {
+        AgentTask task = getTask(taskId);
+        if (cardKey == null || cardKey.isBlank() || messageId == null || messageId.isBlank()) {
+            return task;
+        }
+        task.getCardMessageIds().put(cardKey, messageId);
+        return save(task);
     }
 
     /*

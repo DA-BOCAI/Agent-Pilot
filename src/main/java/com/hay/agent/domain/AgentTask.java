@@ -7,7 +7,9 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -37,5 +39,8 @@ public class AgentTask {
 
     @Builder.Default
     private List<TaskEvent> events = new ArrayList<>();
+
+    @Builder.Default
+    private Map<String, String> cardMessageIds = new HashMap<>();
 }
 

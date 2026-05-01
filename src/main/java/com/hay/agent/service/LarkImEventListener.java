@@ -22,6 +22,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
@@ -312,13 +313,22 @@ public class LarkImEventListener {
             return;
         }
         try {
-            new ProcessBuilder(
+            Process process = new ProcessBuilder(
                     larkCliCommand, "im", "+messages-reply",
-                    "--chat-id", chatId,
                     "--message-id", messageId,
-                    "--content", content,
+                    "--text", content,
                     "--as", "bot"
-            ).start();
+            ).redirectErrorStream(true).start();
+            boolean finished = process.waitFor(30, TimeUnit.SECONDS);
+            if (!finished) {
+                destroyProcessTree(process);
+                log.warn("回复飞书消息超时，已结束 lark-cli 进程，messageId={}", messageId);
+                return;
+            }
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            if (process.exitValue() != 0) {
+                log.warn("回复飞书消息失败，messageId={}，输出={}", messageId, output);
+            }
         } catch (Exception e) {
             log.error("回复消息失败", e);
         }
@@ -328,7 +338,16 @@ public class LarkImEventListener {
         Process process = subscribeProcess;
         subscribeProcess = null;
         if (process != null && process.isAlive()) {
-            process.destroy();
+            destroyProcessTree(process);
         }
+    }
+
+    private void destroyProcessTree(Process process) {
+        process.descendants().forEach(child -> {
+            if (child.isAlive()) {
+                child.destroyForcibly();
+            }
+        });
+        process.destroyForcibly();
     }
 }
