@@ -13,6 +13,8 @@ import com.hay.agent.domain.PlanStep;
 import com.hay.agent.domain.StepStatus;
 import com.hay.agent.domain.TaskStatus;
 import com.hay.agent.planner.Planner;
+import com.hay.agent.service.content.ContentPreviewService;
+import com.hay.agent.service.content.PreviewRefinementService;
 import com.hay.agent.runner.AgentRunner;
 import com.hay.agent.tool.ToolExecutor;
 import org.junit.jupiter.api.Test;

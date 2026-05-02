@@ -14,6 +14,7 @@ import com.hay.agent.domain.StepStatus;
 import com.hay.agent.domain.TaskEvent;
 import com.hay.agent.domain.TaskStatus;
 import com.hay.agent.planner.Planner;
+import com.hay.agent.service.content.PreviewRefinementService;
 import com.hay.agent.service.preview.StepPreviewGenerator;
 import com.hay.agent.store.TaskStore;
 import com.hay.agent.tool.ToolExecutor;
@@ -48,6 +49,7 @@ public class AgentTaskService {
     private final List<StepPreviewGenerator> stepPreviewGenerators;
     private final PreviewRefinementService previewRefinementService;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final TaskWorkspaceStreamService taskWorkspaceStreamService;
 
     @Value("${agent.task.auto-run:false}")
     private boolean autoRun;
@@ -57,13 +59,15 @@ public class AgentTaskService {
                             ToolExecutor toolExecutor,
                             List<StepPreviewGenerator> stepPreviewGenerators,
                             PreviewRefinementService previewRefinementService,
-                            com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
+                            com.fasterxml.jackson.databind.ObjectMapper objectMapper,
+                            TaskWorkspaceStreamService taskWorkspaceStreamService) {
         this.taskStore = taskStore;
         this.planner = planner;
         this.toolExecutor = toolExecutor;
         this.stepPreviewGenerators = stepPreviewGenerators;
         this.previewRefinementService = previewRefinementService;
         this.objectMapper = objectMapper;
+        this.taskWorkspaceStreamService = taskWorkspaceStreamService;
     }
 
     /**
@@ -484,6 +488,31 @@ public class AgentTaskService {
         return save(task);
     }
 
+    /**
+     * 追加来自 IM 对话的补充信息。用于用户在任务确认前继续补充约束时，
+     * 让后续预览和正式创建能够读取到最新上下文。
+     */
+    public AgentTask appendImSupplement(String taskId, String supplement, String messageId) {
+        AgentTask task = getTask(taskId);
+        if (task.getStatus() == TaskStatus.DELIVERED || task.getStatus() == TaskStatus.FAILED) {
+            return task;
+        }
+        if (supplement == null || supplement.isBlank()) {
+            return task;
+        }
+
+        String originalInput = task.getInputText() == null ? "" : task.getInputText();
+        StringBuilder nextInput = new StringBuilder(originalInput.strip());
+        if (nextInput.length() > 0) {
+            nextInput.append("\n\n");
+        }
+        nextInput.append("IM 补充信息：").append(supplement.strip());
+        task.setInputText(nextInput.toString());
+        addEvent(task, "IM_SUPPLEMENT_RECEIVED", "收到 IM 补充信息",
+                Map.of("messageId", messageId == null ? "" : messageId));
+        return save(task);
+    }
+
     /*
     私有方法
      */
@@ -495,7 +524,9 @@ public class AgentTaskService {
      */
     private AgentTask save(AgentTask task) {
         task.setUpdatedAt(Instant.now());
-        return taskStore.save(task);
+        AgentTask savedTask = taskStore.save(task);
+        taskWorkspaceStreamService.publish(savedTask);
+        return savedTask;
     }
 
     /**

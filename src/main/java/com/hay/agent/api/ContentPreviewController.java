@@ -4,7 +4,7 @@ import com.hay.agent.api.dto.preview.DocumentPreviewRequest;
 import com.hay.agent.api.dto.preview.DocumentPreviewResponse;
 import com.hay.agent.api.dto.preview.PresentationPreviewRequest;
 import com.hay.agent.api.dto.preview.PresentationPreviewResponse;
-import com.hay.agent.service.ContentPreviewService;
+import com.hay.agent.service.content.ContentPreviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;

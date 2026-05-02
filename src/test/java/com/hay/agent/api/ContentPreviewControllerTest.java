@@ -2,7 +2,7 @@ package com.hay.agent.api;
 
 import com.hay.agent.api.dto.preview.DocumentPreviewResponse;
 import com.hay.agent.api.dto.preview.PresentationPreviewResponse;
-import com.hay.agent.service.ContentPreviewService;
+import com.hay.agent.service.content.ContentPreviewService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;

@@ -2,7 +2,7 @@ package com.hay.agent.tool;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hay.agent.service.ContentGeneratorService;
+import com.hay.agent.service.content.ContentGeneratorService;
 import com.hay.agent.service.presentation.LarkSlideXmlRenderer;
 import com.hay.agent.service.presentation.PresentationMarkdownParser;
 import com.hay.agent.service.presentation.PresentationSlide;
