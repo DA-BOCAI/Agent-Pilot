@@ -120,3 +120,208 @@ export type ConfirmTaskRequest = {
   stepId: string
   comment?: string
 }
+
+export type Step = {
+  id: string
+  title: string
+  description?: string
+  status: StepStatus
+  displayStatus?: string
+  requiresConfirm: boolean
+  artifactType?: string
+  order: number
+}
+
+export type Confirmation = {
+  available: boolean
+  stage?: 'confirm1' | 'confirm2'
+  stepId?: string
+  title?: string
+  description?: string
+  artifactType?: string
+  theme?: string
+  previewReady?: boolean
+  preview?: Preview
+}
+
+export type Preview = {
+  available: boolean
+  type?: 'doc' | 'slides'
+  title?: string
+  theme?: string
+  stepId?: string
+  data?: unknown
+}
+
+export type AdjustmentControl = {
+  key: string
+  label: string
+  type: 'select' | 'text' | 'structured' | 'instruction'
+  options?: Array<{ label: string; value: string }>
+}
+
+export type DeterministicUpdateAction = {
+  method: 'PUT'
+  endpoint: string
+}
+
+export type NaturalLanguageRefineAction = {
+  method: 'POST'
+  endpoint: string
+}
+
+export type AdjustmentActions = {
+  deterministicUpdate?: DeterministicUpdateAction
+  naturalLanguageRefine?: NaturalLanguageRefineAction
+}
+
+export type Adjustments = {
+  available: boolean
+  stepId?: string
+  type?: 'doc' | 'slides'
+  controls?: AdjustmentControl[]
+  actions?: AdjustmentActions
+}
+
+export type Output = {
+  type: string
+  title: string
+  url: string
+  token?: string
+}
+
+export type TimelineEvent = {
+  timestamp: string
+  type: string
+  title: string
+  message: string
+  level: 'info' | 'success' | 'warning' | 'error'
+  stepId?: string | null
+  metadata?: Record<string, unknown>
+}
+
+export type Workspace = {
+  taskId: string
+  title?: string
+  status: TaskStatus
+  displayStatus?: string
+  nextAction?: string
+  source?: string
+  userId?: string
+  createdAt?: string
+  updatedAt?: string
+  inputSummary?: string
+  contextText?: string
+  steps: Step[]
+  confirmation: Confirmation
+  preview: Preview
+  adjustments: Adjustments
+  outputs: Output[]
+  timeline: TimelineEvent[]
+  debugTask?: unknown
+}
+
+export type BackendStep = {
+  id?: string
+  stepId?: string
+  title?: string
+  description?: string
+  status?: string
+  displayStatus?: string
+  requiresConfirm?: boolean
+  artifactType?: string
+  order?: number
+}
+
+export type BackendConfirmation = {
+  available?: boolean
+  stage?: string
+  stepId?: string
+  title?: string
+  description?: string
+  artifactType?: string
+  theme?: string
+  previewReady?: boolean
+  preview?: BackendPreview
+}
+
+export type BackendPreview = {
+  available?: boolean
+  type?: string
+  title?: string
+  theme?: string
+  stepId?: string
+  data?: unknown
+}
+
+export type BackendAdjustmentControl = {
+  key?: string
+  label?: string
+  type?: string
+  options?: Array<{ label?: string; value?: string }>
+}
+
+export type BackendAdjustmentActions = {
+  deterministicUpdate?: {
+    method?: string
+    endpoint?: string
+  }
+  naturalLanguageRefine?: {
+    method?: string
+    endpoint?: string
+  }
+}
+
+export type BackendAdjustments = {
+  available?: boolean
+  stepId?: string
+  type?: string
+  controls?: BackendAdjustmentControl[]
+  actions?: BackendAdjustmentActions
+}
+
+export type BackendOutput = {
+  type?: string
+  title?: string
+  url?: string
+  token?: string
+}
+
+export type BackendTimelineEvent = {
+  timestamp?: string
+  type?: string
+  title?: string
+  message?: string
+  level?: string
+  stepId?: string | null
+  metadata?: Record<string, unknown>
+}
+
+export type BackendWorkspace = {
+  taskId?: string
+  title?: string
+  status?: string
+  displayStatus?: string
+  nextAction?: string
+  source?: string
+  userId?: string
+  createdAt?: string
+  updatedAt?: string
+  inputSummary?: string
+  contextText?: string
+  steps?: BackendStep[]
+  confirmation?: BackendConfirmation
+  preview?: BackendPreview
+  adjustments?: BackendAdjustments
+  outputs?: BackendOutput[]
+  timeline?: BackendTimelineEvent[]
+  debugTask?: unknown
+}
+
+export type UpdatePreviewRequest = {
+  previewData: unknown
+}
+
+export type RefinePreviewRequest = {
+  instruction: string
+}

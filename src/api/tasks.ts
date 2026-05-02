@@ -1,6 +1,17 @@
-import { requestJson } from './http'
-import { mapTaskEvents, mapTaskView } from '../mappers/taskMapper'
-import type { BackendTaskEvent, BackendTaskView, CreateTaskRequest, TaskEvent, TaskView } from '../types/task'
+import { createSSEConnection, requestJson } from './http'
+import { mapTaskEvents, mapTaskView, mapWorkspace } from '../mappers/taskMapper'
+import type {
+  BackendTaskEvent,
+  BackendTaskView,
+  BackendWorkspace,
+  CreateTaskRequest,
+  RefinePreviewRequest,
+  TaskEvent,
+  TaskView,
+  UpdatePreviewRequest,
+  Workspace,
+} from '../types/task'
+import type { SSEConnection } from './http'
 
 const DEFAULT_SOURCE = 'im_text'
 const DEFAULT_USER_ID = 'user_zhouan'
@@ -54,4 +65,56 @@ export async function getTask(taskId: string): Promise<TaskView> {
 export async function getEvents(taskId: string): Promise<TaskEvent[]> {
   const events = await requestJson<BackendTaskEvent[]>(`/tasks/${taskId}/events`)
   return mapTaskEvents(events)
+}
+
+export async function getWorkspace(taskId: string): Promise<Workspace> {
+  const workspace = await requestJson<BackendWorkspace>(`/tasks/${taskId}/workspace`)
+  return mapWorkspace(workspace)
+}
+
+export function connectWorkspaceStream(
+  taskId: string,
+  handlers: {
+    onSnapshot?: (workspace: Workspace) => void
+    onWorkspace?: (workspace: Workspace) => void
+    onError?: (error: Event) => void
+  }
+): SSEConnection {
+  return createSSEConnection<Workspace>(`/tasks/${taskId}/workspace/stream`, {
+    onSnapshot: handlers.onSnapshot,
+    onWorkspace: handlers.onWorkspace,
+    onError: handlers.onError,
+  })
+}
+
+export async function updatePreview(
+  taskId: string,
+  stepId: string,
+  previewData: unknown
+): Promise<Workspace> {
+  const body: UpdatePreviewRequest = { previewData }
+  const workspace = await requestJson<BackendWorkspace>(
+    `/tasks/${taskId}/steps/${stepId}/preview`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }
+  )
+  return mapWorkspace(workspace)
+}
+
+export async function refinePreview(
+  taskId: string,
+  stepId: string,
+  instruction: string
+): Promise<Workspace> {
+  const body: RefinePreviewRequest = { instruction }
+  const workspace = await requestJson<BackendWorkspace>(
+    `/tasks/${taskId}/steps/${stepId}/preview/refine`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }
+  )
+  return mapWorkspace(workspace)
 }

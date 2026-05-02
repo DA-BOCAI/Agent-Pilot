@@ -1,4 +1,4 @@
-import type { TaskView } from '../types/task'
+import type { TaskView, Workspace, Confirmation } from '../types/task'
 
 type ActionPanelProps = {
   disabled: boolean
@@ -10,6 +10,26 @@ type ActionPanelProps = {
   onRefresh: () => void
   onReset: () => void
   task: TaskView | null
+  workspace?: Workspace | null
+}
+
+function getConfirmationData(workspace?: Workspace | null, task?: TaskView | null): Confirmation | null {
+  if (workspace?.confirmation?.available) {
+    return workspace.confirmation
+  }
+  if (task?.status === 'WAIT_CONFIRM') {
+    return {
+      available: true,
+      stepId: task.nextAction.replace('confirm:', ''),
+    }
+  }
+  return null
+}
+
+function getActionState(workspace?: Workspace | null, task?: TaskView | null) {
+  const status = workspace?.status ?? task?.status
+  const nextAction = workspace?.nextAction ?? task?.nextAction
+  return { status, nextAction }
 }
 
 export function ActionPanel({
@@ -22,9 +42,12 @@ export function ActionPanel({
   onRefresh,
   onReset,
   task,
+  workspace,
 }: ActionPanelProps) {
-  // 未创建任务时只给演示入口；真实飞书入口未来可从后端回调触发。
-  if (!task) {
+  const confirmation = getConfirmationData(workspace, task)
+  const { status, nextAction } = getActionState(workspace, task)
+
+  if (!task && !workspace) {
     return (
       <div className="action-stack">
         <button className="primary" disabled={disabled} onClick={onCreate}>
@@ -37,8 +60,7 @@ export function ActionPanel({
     )
   }
 
-  // 页面动作完全由 TaskView.status + nextAction 决定，不让用户看到无关操作。
-  if (task.status === 'CREATED' && task.nextAction === 'plan') {
+  if (status === 'CREATED' && nextAction === 'plan') {
     return (
       <div className="action-stack">
         <button className="primary" disabled={disabled} onClick={onPlan}>
@@ -51,7 +73,7 @@ export function ActionPanel({
     )
   }
 
-  if ((task.status === 'PLANNED' || task.status === 'RUNNING') && task.nextAction === 'execute') {
+  if ((status === 'PLANNED' || status === 'RUNNING') && nextAction === 'execute') {
     return (
       <div className="action-stack">
         <button className="primary" disabled={disabled} onClick={onExecute}>
@@ -64,10 +86,15 @@ export function ActionPanel({
     )
   }
 
-  // WAIT_CONFIRM 是唯一需要用户做二选一确认的状态。
-  if (task.status === 'WAIT_CONFIRM' && task.nextAction.startsWith('confirm:')) {
+  if (status === 'WAIT_CONFIRM' && confirmation?.available) {
     return (
       <div className="action-stack split">
+        {confirmation.title && (
+          <div className="confirmation-title">{confirmation.title}</div>
+        )}
+        {confirmation.description && (
+          <div className="confirmation-description">{confirmation.description}</div>
+        )}
         <button className="primary" disabled={disabled} onClick={() => onConfirm(true)}>
           通过
         </button>
@@ -81,7 +108,7 @@ export function ActionPanel({
     )
   }
 
-  if (task.status === 'DELIVERED') {
+  if (status === 'DELIVERED') {
     return (
       <div className="action-stack">
         <p className="action-note">交付物已在下方展示，可回到飞书继续协作。</p>
@@ -93,7 +120,7 @@ export function ActionPanel({
     )
   }
 
-  if (task.status === 'FAILED') {
+  if (status === 'FAILED') {
     return (
       <div className="action-stack">
         <button className="primary" disabled={disabled} onClick={onReset}>

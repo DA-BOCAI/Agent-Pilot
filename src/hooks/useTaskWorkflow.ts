@@ -1,36 +1,125 @@
-import { useEffect, useState } from 'react'
-import { createTask, executeTask, getTask, planTask, confirmTask as requestConfirmTask } from '../api/tasks'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  connectWorkspaceStream,
+  createTask,
+  executeTask,
+  getTask,
+  getWorkspace,
+  planTask,
+  confirmTask as requestConfirmTask,
+  refinePreview,
+  updatePreview,
+} from '../api/tasks'
 import { previewDocument, previewPresentation } from '../api/previews'
 import { createEvent, hasArtifactPayload, updateTask } from '../domain/taskModel'
 import { getConfirmStepId } from '../domain/taskLabels'
 import { createMockTask, mockConfirmTask, mockExecuteTask, mockPlanTask } from '../mocks/taskMock'
 import { clearPersistedTask, getPersistedMockTask, getPersistedTaskId, persistTask } from '../storage/taskStorage'
-import type { Artifact, TaskView } from '../types/task'
+import type { Artifact, TaskView, Workspace } from '../types/task'
+import type { SSEConnection } from '../api/http'
 
 const DEMO_FEISHU_MESSAGE = '下周三给管理层同步 Agent-Pilot 协作闭环，重点讲从 IM 到演示稿。'
+const SSE_RECONNECT_DELAY = 3000
+const SSE_MAX_RECONNECT_ATTEMPTS = 5
 
 export function useTaskWorkflow() {
   const [task, setTask] = useState<TaskView | null>(null)
+  const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [isMockMode, setIsMockMode] = useState(false)
+  const [sseConnected, setSseConnected] = useState(false)
+
+  const sseConnectionRef = useRef<SSEConnection | null>(null)
+  const reconnectAttemptsRef = useRef(0)
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isUnmountedRef = useRef(false)
 
   const confirmStepId = task ? getConfirmStepId(task.nextAction) : null
+
+  const closeSSEConnection = useCallback(() => {
+    if (sseConnectionRef.current) {
+      sseConnectionRef.current.close()
+      sseConnectionRef.current = null
+    }
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = null
+    }
+    setSseConnected(false)
+  }, [])
+
+  const fallbackToGetWorkspace = useCallback(async (taskId: string) => {
+    try {
+      const ws = await getWorkspace(taskId)
+      setWorkspace(ws)
+      setSseConnected(false)
+    } catch (fallbackError) {
+      console.error('Fallback getWorkspace failed:', fallbackError)
+    }
+  }, [])
+
+  const connectSSE = useCallback((taskId: string) => {
+    if (isUnmountedRef.current) return
+
+    closeSSEConnection()
+
+    const connection = connectWorkspaceStream(taskId, {
+      onSnapshot: (ws: Workspace) => {
+        if (isUnmountedRef.current) return
+        setWorkspace(ws)
+        setSseConnected(true)
+        reconnectAttemptsRef.current = 0
+      },
+      onWorkspace: (ws: Workspace) => {
+        if (isUnmountedRef.current) return
+        setWorkspace(ws)
+        setSseConnected(true)
+        reconnectAttemptsRef.current = 0
+      },
+      onError: async () => {
+        if (isUnmountedRef.current) return
+        console.error('SSE connection error')
+        setSseConnected(false)
+
+        if (reconnectAttemptsRef.current < SSE_MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttemptsRef.current += 1
+          console.log(`SSE reconnecting... attempt ${reconnectAttemptsRef.current}/${SSE_MAX_RECONNECT_ATTEMPTS}`)
+
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (!isUnmountedRef.current && taskId) {
+              connectSSE(taskId)
+            }
+          }, SSE_RECONNECT_DELAY)
+        } else {
+          console.log('SSE max reconnect attempts reached, falling back to GET /workspace')
+          await fallbackToGetWorkspace(taskId)
+        }
+      },
+    })
+
+    sseConnectionRef.current = connection
+  }, [closeSSEConnection, fallbackToGetWorkspace])
 
   useEffect(() => {
     const taskId = getPersistedTaskId()
     if (!taskId) return
 
-    // 启动时优先恢复真实任务；接口不可用时回落到本地 mock，保证演示链路不断。
     void runAction(async () => {
       try {
-        applyTask(await getTask(taskId), false)
+        const existingTask = await getTask(taskId)
+        applyTask(existingTask, false)
+        connectSSE(taskId)
       } catch {
         restoreMockTask()
       }
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+
+    return () => {
+      isUnmountedRef.current = true
+      closeSSEConnection()
+    }
+  }, [connectSSE, closeSSEConnection])
 
   async function runAction(action: () => Promise<void>) {
     setIsLoading(true)
@@ -50,6 +139,10 @@ export function useTaskWorkflow() {
     persistTask(nextTask)
   }
 
+  function applyWorkspace(ws: Workspace) {
+    setWorkspace(ws)
+  }
+
   function restoreMockTask() {
     const mockTask = getPersistedMockTask()
     if (!mockTask) return
@@ -60,7 +153,9 @@ export function useTaskWorkflow() {
   async function handleCreateTask() {
     await runAction(async () => {
       try {
-        applyTask(await createTask(DEMO_FEISHU_MESSAGE), false)
+        const newTask = await createTask(DEMO_FEISHU_MESSAGE)
+        applyTask(newTask, false)
+        connectSSE(newTask.taskId)
       } catch {
         applyTask(createMockTask(DEMO_FEISHU_MESSAGE), true)
       }
@@ -83,7 +178,6 @@ export function useTaskWorkflow() {
     await runAction(async () => {
       try {
         const executedTask = await executeTask(task.taskId)
-        // execute 是主流程，预览接口只是补充展示数据；预览失败不应拖垮任务状态更新。
         applyTask(await enrichTaskPreviews(executedTask), false)
       } catch {
         applyTask(mockExecuteTask(task), true)
@@ -106,9 +200,54 @@ export function useTaskWorkflow() {
     if (!task) return
     await runAction(async () => {
       try {
-        applyTask(await getTask(task.taskId), false)
+        const [refreshedTask, refreshedWorkspace] = await Promise.all([
+          getTask(task.taskId),
+          getWorkspace(task.taskId),
+        ])
+        applyTask(refreshedTask, false)
+        applyWorkspace(refreshedWorkspace)
       } catch {
         restoreMockTask()
+      }
+    })
+  }
+
+  async function handleDeterministicUpdate(previewData: unknown) {
+    if (!workspace?.preview?.stepId) {
+      setError('无法更新：当前没有活动的预览')
+      return
+    }
+
+    await runAction(async () => {
+      try {
+        const updatedWorkspace = await updatePreview(
+          workspace.taskId,
+          workspace.preview.stepId,
+          previewData
+        )
+        applyWorkspace(updatedWorkspace)
+      } catch (updateError) {
+        setError(updateError instanceof Error ? updateError.message : '确定性更新失败')
+      }
+    })
+  }
+
+  async function handleNaturalLanguageRefine(instruction: string) {
+    if (!workspace?.preview?.stepId) {
+      setError('无法精修：当前没有活动的预览')
+      return
+    }
+
+    await runAction(async () => {
+      try {
+        const updatedWorkspace = await refinePreview(
+          workspace.taskId,
+          workspace.preview.stepId,
+          instruction
+        )
+        applyWorkspace(updatedWorkspace)
+      } catch (refineError) {
+        setError(refineError instanceof Error ? refineError.message : '自然语言精修失败')
       }
     })
   }
@@ -123,7 +262,6 @@ export function useTaskWorkflow() {
         data: preview,
       }
 
-      // 直接生成 PPT 时，把 slides 放在 artifact 首位，任务刷新后预览区会自动选中它。
       const nextTask = updateTask(sourceTask, {
         status: 'DELIVERED',
         nextAction: 'none',
@@ -140,10 +278,13 @@ export function useTaskWorkflow() {
   }
 
   function handleReset() {
+    closeSSEConnection()
     clearPersistedTask()
     setTask(null)
+    setWorkspace(null)
     setError('')
     setIsMockMode(false)
+    reconnectAttemptsRef.current = 0
   }
 
   return {
@@ -151,14 +292,18 @@ export function useTaskWorkflow() {
     error,
     handleConfirm,
     handleCreateTask,
+    handleDeterministicUpdate,
     handleExecuteTask,
+    handleNaturalLanguageRefine,
     handlePlanTask,
     handlePreviewPresentation,
     handleRefresh,
     handleReset,
     isLoading,
     isMockMode,
+    sseConnected,
     task,
+    workspace,
   }
 }
 
@@ -167,7 +312,6 @@ async function enrichTaskPreviews(task: TaskView): Promise<TaskView> {
 
   const previewArtifacts = task.artifacts.filter((artifact) => artifact.type !== 'delivery')
   if (previewArtifacts.length === 0) {
-    // 有些后端实现只返回任务完成状态，不返回可渲染 artifact；这里主动生成文档/PPT预览。
     const createdArtifacts = await createPreviewArtifacts(task)
     return createdArtifacts.length ? { ...task, artifacts: [...task.artifacts, ...createdArtifacts] } : task
   }
@@ -177,7 +321,6 @@ async function enrichTaskPreviews(task: TaskView): Promise<TaskView> {
 }
 
 async function createPreviewArtifacts(task: TaskView): Promise<Artifact[]> {
-  // 两类预览互不阻塞：PPT 失败时文档仍可展示，反过来也一样。
   const [documentResult, presentationResult] = await Promise.allSettled([
     previewDocument({ userInput: task.inputText, docType: '方案文档' }),
     previewPresentation({ userInput: task.inputText, topic: task.inputText }),
@@ -198,7 +341,6 @@ async function createPreviewArtifacts(task: TaskView): Promise<Artifact[]> {
 async function enrichArtifact(task: TaskView, artifact: Artifact): Promise<Artifact> {
   if (hasArtifactPayload(artifact)) return artifact
 
-  // 后端只给链接或标题时，按 artifact 类型补一次结构化 JSON，失败则保留原始 artifact。
   if (artifact.type === 'doc') {
     try {
       const preview = await previewDocument({ userInput: task.inputText, docType: artifact.title || '方案文档' })

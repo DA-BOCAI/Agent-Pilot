@@ -1,19 +1,32 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { ArtifactPreview } from './ArtifactPreview'
 import { EmptyState } from './EmptyState'
 import { getArtifactLabel } from '../domain/taskLabels'
-import type { Artifact } from '../types/task'
+import type { Artifact, Preview } from '../types/task'
 
 type PreviewPanelProps = {
   artifacts: Artifact[]
+  workspacePreview?: Preview
   isDelivered: boolean
 }
 
-export function PreviewPanel({ artifacts, isDelivered }: PreviewPanelProps) {
+export function PreviewPanel({ artifacts, workspacePreview, isDelivered }: PreviewPanelProps) {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
 
-  const activeArtifact = artifacts[selectedIndex] ?? artifacts[0]
+  const previewArtifacts = useMemo(() => {
+    if (workspacePreview?.available && workspacePreview.data) {
+      const previewArtifact: Artifact = {
+        type: workspacePreview.type || 'doc',
+        title: workspacePreview.title || '预览',
+        data: workspacePreview.data,
+      }
+      return [previewArtifact, ...artifacts.filter(a => a.type !== workspacePreview.type)]
+    }
+    return artifacts
+  }, [workspacePreview, artifacts])
+
+  const activeArtifact = previewArtifacts[selectedIndex] ?? previewArtifacts[0]
 
   const handleSelect = useCallback((index: number) => {
     setIsLoading(true)
@@ -21,7 +34,7 @@ export function PreviewPanel({ artifacts, isDelivered }: PreviewPanelProps) {
     setTimeout(() => setIsLoading(false), 200)
   }, [])
 
-  if (!artifacts.length) {
+  if (!previewArtifacts.length) {
     return (
       <section className="preview-panel-section reveal" aria-label="预览区域">
         <div className="preview-panel-header">
@@ -42,13 +55,12 @@ export function PreviewPanel({ artifacts, isDelivered }: PreviewPanelProps) {
       <div className="preview-panel-header">
         <div className="section-title-wrap">
           <h2 className="section-title">{isDelivered ? '交付预览' : '内容预览'}</h2>
-          <span className="section-badge">{artifacts.length} 文件</span>
+          <span className="section-badge">{previewArtifacts.length} 文件</span>
         </div>
       </div>
 
-      {/* 文件标签栏 */}
       <div className="preview-tabs" role="tablist" aria-label="预览文件">
-        {artifacts.map((artifact, index) => (
+        {previewArtifacts.map((artifact, index) => (
           <button
             key={`${artifact.type}-${artifact.title}-${index}`}
             className={`preview-tab ${artifact.type} ${index === selectedIndex ? 'is-selected' : ''}`}
