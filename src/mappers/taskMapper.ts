@@ -122,8 +122,6 @@ function getArtifactFallbackTitle(type: string) {
 }
 
 export function mapWorkspace(dto: BackendWorkspace): Workspace {
-  const now = new Date().toISOString()
-
   return {
     taskId: dto.taskId ?? '',
     title: dto.title,

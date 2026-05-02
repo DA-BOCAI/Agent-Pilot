@@ -15,6 +15,7 @@ import { createEvent, hasArtifactPayload, updateTask } from '../domain/taskModel
 import { getConfirmStepId } from '../domain/taskLabels'
 import { createMockTask, mockConfirmTask, mockExecuteTask, mockPlanTask } from '../mocks/taskMock'
 import { clearPersistedTask, getPersistedMockTask, getPersistedTaskId, persistTask } from '../storage/taskStorage'
+import { getTaskIdFromUrl } from '../utils/urlParams'
 import type { Artifact, TaskView, Workspace } from '../types/task'
 import type { SSEConnection } from '../api/http'
 
@@ -102,7 +103,7 @@ export function useTaskWorkflow() {
   }, [closeSSEConnection, fallbackToGetWorkspace])
 
   useEffect(() => {
-    const taskId = getPersistedTaskId()
+    const taskId = getTaskIdFromUrl() || getPersistedTaskId()
     if (!taskId) return
 
     void runAction(async () => {
@@ -222,7 +223,7 @@ export function useTaskWorkflow() {
       try {
         const updatedWorkspace = await updatePreview(
           workspace.taskId,
-          workspace.preview.stepId,
+          workspace.preview!.stepId!,
           previewData
         )
         applyWorkspace(updatedWorkspace)
@@ -242,7 +243,7 @@ export function useTaskWorkflow() {
       try {
         const updatedWorkspace = await refinePreview(
           workspace.taskId,
-          workspace.preview.stepId,
+          workspace.preview!.stepId!,
           instruction
         )
         applyWorkspace(updatedWorkspace)
