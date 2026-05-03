@@ -1,6 +1,5 @@
-const API_ROOT = createApiRoot()
+const API_ROOT = 'https://agent-api.nexaid.top/api/v1'
 
-// 所有业务接口都走这一层，避免组件或 hook 里散落 base URL、headers 和 JSON 校验逻辑。
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const url = createApiUrl(path)
   const response = await fetch(url, {
@@ -26,13 +25,6 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
 function createApiUrl(path: string) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   return `${API_ROOT}${normalizedPath}`
-}
-
-function createApiRoot() {
-  const configuredBase = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/$/, '')
-  if (!configuredBase) return '/api/v1'
-  // cpolar 地址每天会变，源码只接受 origin；是否已经带 /api/v1 都在这里兼容。
-  return configuredBase.endsWith('/api/v1') ? configuredBase : `${configuredBase}/api/v1`
 }
 
 export type SSEEventHandler<T = unknown> = (data: T) => void
