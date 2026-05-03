@@ -36,7 +36,7 @@ export function PreviewPanel({ artifacts, workspacePreview, isDelivered }: Previ
 
   if (!previewArtifacts.length) {
     return (
-      <section className="preview-panel-section reveal" aria-label="预览区域">
+      <section className="preview-panel-section" aria-label="预览区域">
         <div className="preview-panel-header">
           <div className="section-title-wrap">
             <h2 className="section-title">{isDelivered ? '交付预览' : '内容预览'}</h2>
@@ -51,7 +51,7 @@ export function PreviewPanel({ artifacts, workspacePreview, isDelivered }: Previ
   }
 
   return (
-    <section className="preview-panel-section reveal" aria-label="预览区域">
+    <section className="preview-panel-section" aria-label="预览区域">
       <div className="preview-panel-header">
         <div className="section-title-wrap">
           <h2 className="section-title">{isDelivered ? '交付预览' : '内容预览'}</h2>
@@ -75,7 +75,6 @@ export function PreviewPanel({ artifacts, workspacePreview, isDelivered }: Previ
         ))}
       </div>
 
-      {/* 预览内容区 */}
       <div className="preview-panel-body">
         {isLoading ? (
           <div className="preview-loading">

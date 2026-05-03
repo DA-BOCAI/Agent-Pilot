@@ -14,7 +14,6 @@ import { previewDocument, previewPresentation } from '../api/previews'
 import { createEvent, hasArtifactPayload, updateTask } from '../domain/taskModel'
 import { getConfirmStepId } from '../domain/taskLabels'
 import { createMockTask, mockConfirmTask, mockExecuteTask, mockPlanTask } from '../mocks/taskMock'
-import { clearPersistedTask, getPersistedMockTask, getPersistedTaskId, persistTask } from '../storage/taskStorage'
 import { getTaskIdFromUrl } from '../utils/urlParams'
 import type { Artifact, TaskView, Workspace } from '../types/task'
 import type { SSEConnection } from '../api/http'
@@ -103,7 +102,7 @@ export function useTaskWorkflow() {
   }, [closeSSEConnection, fallbackToGetWorkspace])
 
   useEffect(() => {
-    const taskId = getTaskIdFromUrl() || getPersistedTaskId()
+    const taskId = getTaskIdFromUrl()
     if (!taskId) return
 
     void runAction(async () => {
@@ -112,7 +111,7 @@ export function useTaskWorkflow() {
         applyTask(existingTask, false)
         connectSSE(taskId)
       } catch {
-        restoreMockTask()
+        // 接口失败时不恢复任何数据，不显示内容
       }
     })
 
@@ -137,18 +136,10 @@ export function useTaskWorkflow() {
   function applyTask(nextTask: TaskView, mockMode = isMockMode) {
     setTask(nextTask)
     setIsMockMode(mockMode)
-    persistTask(nextTask)
   }
 
   function applyWorkspace(ws: Workspace) {
     setWorkspace(ws)
-  }
-
-  function restoreMockTask() {
-    const mockTask = getPersistedMockTask()
-    if (!mockTask) return
-    setTask(mockTask)
-    setIsMockMode(true)
   }
 
   async function handleCreateTask() {
@@ -208,7 +199,7 @@ export function useTaskWorkflow() {
         applyTask(refreshedTask, false)
         applyWorkspace(refreshedWorkspace)
       } catch {
-        restoreMockTask()
+        // 接口失败时不恢复任何数据，不显示内容
       }
     })
   }
@@ -268,8 +259,7 @@ export function useTaskWorkflow() {
         nextAction: 'none',
         artifacts: [
           previewArtifact,
-          ...sourceTask.artifacts.filter((artifact) => artifact.type !== 'slides' && artifact.type !== 'delivery'),
-          ...sourceTask.artifacts.filter((artifact) => artifact.type === 'delivery'),
+          ...sourceTask.artifacts.filter((artifact) => artifact.type !== 'slides'),
         ],
         events: [...sourceTask.events, createEvent('TASK_DELIVERED', 'PPT 预览已生成')],
       })
@@ -280,7 +270,6 @@ export function useTaskWorkflow() {
 
   function handleReset() {
     closeSSEConnection()
-    clearPersistedTask()
     setTask(null)
     setWorkspace(null)
     setError('')
@@ -311,7 +300,7 @@ export function useTaskWorkflow() {
 async function enrichTaskPreviews(task: TaskView): Promise<TaskView> {
   if (task.status !== 'DELIVERED') return task
 
-  const previewArtifacts = task.artifacts.filter((artifact) => artifact.type !== 'delivery')
+  const previewArtifacts = task.artifacts.filter((artifact) => artifact.type !== 'unknown')
   if (previewArtifacts.length === 0) {
     const createdArtifacts = await createPreviewArtifacts(task)
     return createdArtifacts.length ? { ...task, artifacts: [...task.artifacts, ...createdArtifacts] } : task

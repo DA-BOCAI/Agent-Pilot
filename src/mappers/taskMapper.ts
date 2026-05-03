@@ -104,13 +104,11 @@ function normalizeStepStatus(status?: string): StepStatus {
 }
 
 function normalizeArtifactType(type: string): ArtifactType {
-  // 真实接口和 mock 可能使用 document/presentation/ppt 等别名，先归一成 UI 可识别类型。
   const normalized = type.toLowerCase()
   if (normalized === 'doc' || normalized === 'document') return 'doc'
   if (normalized === 'slides' || normalized === 'slide' || normalized === 'ppt' || normalized === 'presentation') {
     return 'slides'
   }
-  if (normalized === 'delivery' || normalized === 'link') return 'delivery'
   return 'unknown'
 }
 

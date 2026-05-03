@@ -51,7 +51,7 @@ export function AdjustmentsPanel({
   const hasNaturalLanguageAction = adjustments.actions?.naturalLanguageRefine
 
   return (
-    <section className="adjustments-panel-section reveal" aria-label="调整面板">
+    <section className="adjustments-panel-section" aria-label="调整面板">
       <div className="adjustments-panel-header">
         <div className="section-title-wrap">
           <h2 className="section-title">调整面板</h2>
@@ -95,7 +95,7 @@ export function AdjustmentsPanel({
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
               disabled={disabled || isSubmitting}
-              rows={3}
+              rows={2}
             />
             <button
               className="btn btn-primary adjustments-submit-btn"

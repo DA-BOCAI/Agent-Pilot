@@ -3,7 +3,7 @@ export type TaskStatus = 'CREATED' | 'PLANNED' | 'WAIT_CONFIRM' | 'RUNNING' | 'D
 
 export type StepStatus = 'PENDING' | 'RUNNING' | 'WAIT_CONFIRM' | 'APPROVED' | 'SKIPPED' | 'DONE' | 'FAILED'
 
-export type ArtifactType = 'doc' | 'slides' | 'delivery' | 'unknown'
+export type ArtifactType = 'doc' | 'slides' | 'unknown'
 
 export type EventType =
   | 'TASK_CREATED'

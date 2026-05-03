@@ -32,7 +32,6 @@ export const stepStatusLabels: Record<StepStatus, string> = {
 const artifactLabels: Record<ArtifactType, string> = {
   doc: '文档',
   slides: '演示稿',
-  delivery: '预览',
   unknown: '预览',
 }
 

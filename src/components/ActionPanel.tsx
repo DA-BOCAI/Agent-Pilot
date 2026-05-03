@@ -50,10 +50,10 @@ export function ActionPanel({
   if (!task && !workspace) {
     return (
       <div className="action-stack">
-        <button className="primary" disabled={disabled} onClick={onCreate}>
+        <button className="btn btn-primary" disabled={disabled} onClick={onCreate}>
           创建模拟任务
         </button>
-        <button disabled={disabled} onClick={onPreviewPresentation}>
+        <button className="btn btn-secondary" disabled={disabled} onClick={onPreviewPresentation}>
           生成PPT预览
         </button>
       </div>
@@ -63,10 +63,10 @@ export function ActionPanel({
   if (status === 'CREATED' && nextAction === 'plan') {
     return (
       <div className="action-stack">
-        <button className="primary" disabled={disabled} onClick={onPlan}>
+        <button className="btn btn-primary" disabled={disabled} onClick={onPlan}>
           生成规划
         </button>
-        <button disabled={disabled} onClick={onPreviewPresentation}>
+        <button className="btn btn-secondary" disabled={disabled} onClick={onPreviewPresentation}>
           生成PPT预览
         </button>
       </div>
@@ -76,10 +76,10 @@ export function ActionPanel({
   if ((status === 'PLANNED' || status === 'RUNNING') && nextAction === 'execute') {
     return (
       <div className="action-stack">
-        <button className="primary" disabled={disabled} onClick={onExecute}>
+        <button className="btn btn-primary" disabled={disabled} onClick={onExecute}>
           执行任务
         </button>
-        <button disabled={disabled} onClick={onPreviewPresentation}>
+        <button className="btn btn-secondary" disabled={disabled} onClick={onPreviewPresentation}>
           生成PPT预览
         </button>
       </div>
@@ -95,13 +95,13 @@ export function ActionPanel({
         {confirmation.description && (
           <div className="confirmation-description">{confirmation.description}</div>
         )}
-        <button className="primary" disabled={disabled} onClick={() => onConfirm(true)}>
+        <button className="btn btn-primary" disabled={disabled} onClick={() => onConfirm(true)}>
           通过
         </button>
-        <button disabled={disabled} onClick={() => onConfirm(false)}>
+        <button className="btn btn-secondary" disabled={disabled} onClick={() => onConfirm(false)}>
           拒绝
         </button>
-        <button disabled={disabled} onClick={onPreviewPresentation}>
+        <button className="btn btn-secondary" disabled={disabled} onClick={onPreviewPresentation}>
           生成PPT预览
         </button>
       </div>
@@ -111,11 +111,10 @@ export function ActionPanel({
   if (status === 'DELIVERED') {
     return (
       <div className="action-stack">
-        <p className="action-note">交付物已在下方展示，可回到飞书继续协作。</p>
-        <button className="primary" disabled={disabled} onClick={onPreviewPresentation}>
+        <button className="btn btn-primary" disabled={disabled} onClick={onPreviewPresentation}>
           重新生成PPT预览
         </button>
-        <button disabled={disabled}>返回 IM</button>
+        <button className="btn btn-secondary" disabled={disabled}>返回 IM</button>
       </div>
     )
   }
@@ -123,13 +122,13 @@ export function ActionPanel({
   if (status === 'FAILED') {
     return (
       <div className="action-stack">
-        <button className="primary" disabled={disabled} onClick={onReset}>
+        <button className="btn btn-primary" disabled={disabled} onClick={onReset}>
           重新创建
         </button>
-        <button disabled={disabled} onClick={onRefresh}>
+        <button className="btn btn-secondary" disabled={disabled} onClick={onRefresh}>
           刷新任务
         </button>
-        <button disabled={disabled} onClick={onPreviewPresentation}>
+        <button className="btn btn-secondary" disabled={disabled} onClick={onPreviewPresentation}>
           生成PPT预览
         </button>
       </div>
@@ -138,10 +137,10 @@ export function ActionPanel({
 
   return (
     <div className="action-stack">
-      <button disabled={disabled} onClick={onRefresh}>
+      <button className="btn btn-secondary" disabled={disabled} onClick={onRefresh}>
         刷新任务
       </button>
-      <button disabled={disabled} onClick={onPreviewPresentation}>
+      <button className="btn btn-secondary" disabled={disabled} onClick={onPreviewPresentation}>
         生成PPT预览
       </button>
     </div>
