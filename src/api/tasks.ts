@@ -118,3 +118,34 @@ export async function refinePreview(
   )
   return mapWorkspace(workspace)
 }
+
+export async function confirmWorkspace(
+  taskId: string,
+  stepId: string,
+  approved: boolean = true,
+  comment?: string
+): Promise<Workspace> {
+  const workspace = await requestJson<BackendWorkspace>(
+    `/tasks/${taskId}/workspace/confirm`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ stepId, approved, comment: comment ?? '用户在工作台确认' }),
+    }
+  )
+  return mapWorkspace(workspace)
+}
+
+export async function cancelWorkspace(
+  taskId: string,
+  stepId: string,
+  comment?: string
+): Promise<Workspace> {
+  const workspace = await requestJson<BackendWorkspace>(
+    `/tasks/${taskId}/workspace/cancel`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ stepId, comment: comment ?? '用户在工作台取消' }),
+    }
+  )
+  return mapWorkspace(workspace)
+}

@@ -3,12 +3,11 @@ import type { TaskView, Workspace, Confirmation } from '../types/task'
 type ActionPanelProps = {
   disabled: boolean
   onConfirm: (approved: boolean) => void
-  onCreate: () => void
-  onExecute: () => void
   onPlan: () => void
-  onPreviewPresentation: () => void
   onRefresh: () => void
   onReset: () => void
+  onWorkspaceConfirm: () => void
+  onWorkspaceCancel: () => void
   task: TaskView | null
   workspace?: Workspace | null
 }
@@ -35,12 +34,11 @@ function getActionState(workspace?: Workspace | null, task?: TaskView | null) {
 export function ActionPanel({
   disabled,
   onConfirm,
-  onCreate,
-  onExecute,
   onPlan,
-  onPreviewPresentation,
   onRefresh,
   onReset,
+  onWorkspaceConfirm,
+  onWorkspaceCancel,
   task,
   workspace,
 }: ActionPanelProps) {
@@ -48,16 +46,7 @@ export function ActionPanel({
   const { status, nextAction } = getActionState(workspace, task)
 
   if (!task && !workspace) {
-    return (
-      <div className="action-stack">
-        <button className="btn btn-primary" disabled={disabled} onClick={onCreate}>
-          创建模拟任务
-        </button>
-        <button className="btn btn-secondary" disabled={disabled} onClick={onPreviewPresentation}>
-          生成PPT预览
-        </button>
-      </div>
-    )
+    return null
   }
 
   if (status === 'CREATED' && nextAction === 'plan') {
@@ -66,21 +55,18 @@ export function ActionPanel({
         <button className="btn btn-primary" disabled={disabled} onClick={onPlan}>
           生成规划
         </button>
-        <button className="btn btn-secondary" disabled={disabled} onClick={onPreviewPresentation}>
-          生成PPT预览
-        </button>
       </div>
     )
   }
 
   if ((status === 'PLANNED' || status === 'RUNNING') && nextAction === 'execute') {
     return (
-      <div className="action-stack">
-        <button className="btn btn-primary" disabled={disabled} onClick={onExecute}>
-          执行任务
+      <div className="action-stack split">
+        <button className="btn btn-primary" disabled={disabled} onClick={onWorkspaceConfirm}>
+          确认
         </button>
-        <button className="btn btn-secondary" disabled={disabled} onClick={onPreviewPresentation}>
-          生成PPT预览
+        <button className="btn btn-secondary" disabled={disabled} onClick={onWorkspaceCancel}>
+          取消
         </button>
       </div>
     )
@@ -101,22 +87,12 @@ export function ActionPanel({
         <button className="btn btn-secondary" disabled={disabled} onClick={() => onConfirm(false)}>
           拒绝
         </button>
-        <button className="btn btn-secondary" disabled={disabled} onClick={onPreviewPresentation}>
-          生成PPT预览
-        </button>
       </div>
     )
   }
 
   if (status === 'DELIVERED') {
-    return (
-      <div className="action-stack">
-        <button className="btn btn-primary" disabled={disabled} onClick={onPreviewPresentation}>
-          重新生成PPT预览
-        </button>
-        <button className="btn btn-secondary" disabled={disabled}>返回 IM</button>
-      </div>
-    )
+    return null
   }
 
   if (status === 'FAILED') {
@@ -128,9 +104,6 @@ export function ActionPanel({
         <button className="btn btn-secondary" disabled={disabled} onClick={onRefresh}>
           刷新任务
         </button>
-        <button className="btn btn-secondary" disabled={disabled} onClick={onPreviewPresentation}>
-          生成PPT预览
-        </button>
       </div>
     )
   }
@@ -139,9 +112,6 @@ export function ActionPanel({
     <div className="action-stack">
       <button className="btn btn-secondary" disabled={disabled} onClick={onRefresh}>
         刷新任务
-      </button>
-      <button className="btn btn-secondary" disabled={disabled} onClick={onPreviewPresentation}>
-        生成PPT预览
       </button>
     </div>
   )

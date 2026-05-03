@@ -14,17 +14,14 @@ function App() {
     confirmStepId,
     error,
     handleConfirm,
-    handleCreateTask,
     handleDeterministicUpdate,
     handleNaturalLanguageRefine,
-    handleExecuteTask,
-    handleNaturalLanguageRefine: _handleNaturalLanguageRefine,
     handlePlanTask,
-    handlePreviewPresentation,
     handleRefresh,
     handleReset,
+    handleWorkspaceConfirm,
+    handleWorkspaceCancel,
     isLoading,
-    isMockMode,
     sseConnected,
     task,
     workspace,
@@ -67,11 +64,9 @@ function App() {
           <TaskHeader
             task={task}
             workspace={workspace}
-            isMockMode={isMockMode}
             isLoading={isLoading}
             onRefresh={handleRefresh}
             onReset={handleReset}
-            onCreate={handleCreateTask}
           />
           {/* 全局进度条 */}
           {displaySteps.length > 0 && (
@@ -134,7 +129,7 @@ function App() {
                 ? getNextActionText(workspace.nextAction)
                 : task
                   ? getNextActionText(task.nextAction)
-                  : '等待飞书消息卡片触发任务，或使用演示按钮创建模拟任务。'}
+                  : '等待飞书消息卡片触发任务。'}
             </span>
             {error && <span className="bottom-bar-error">{error}</span>}
           </div>
@@ -142,12 +137,11 @@ function App() {
             <ActionPanel
               disabled={isLoading}
               onConfirm={handleConfirm}
-              onCreate={handleCreateTask}
-              onExecute={handleExecuteTask}
               onPlan={handlePlanTask}
-              onPreviewPresentation={handlePreviewPresentation}
               onRefresh={handleRefresh}
               onReset={handleReset}
+              onWorkspaceConfirm={handleWorkspaceConfirm}
+              onWorkspaceCancel={handleWorkspaceCancel}
               task={task}
               workspace={workspace}
             />
