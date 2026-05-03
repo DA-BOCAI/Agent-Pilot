@@ -1040,7 +1040,7 @@ button, input, textarea, select {
   .sidebar {
     border-right: none;
     border-bottom: 1px solid var(--line-light);
-    max-height: 200px;
+    max-height: 220px;
     overflow-y: auto;
   }
 
@@ -1066,56 +1066,286 @@ button, input, textarea, select {
   }
 
   .bottom-bar-info {
-    justify-content: center;
+    justify-content: flex-start;
   }
 
   .bottom-bar-controls {
-    justify-content: center;
+    justify-content: flex-start;
   }
 }
 
 @media (max-width: 767px) {
-  .top-bar-inner {
-    padding: var(--space-2) var(--space-3);
+  /* 全局文本安全 */
+  .app-shell {
+    overflow-x: hidden;
   }
 
-  .task-header-row {
-    flex-wrap: wrap;
+  /* 顶部栏 */
+  .top-bar-inner {
+    padding: var(--space-2) var(--space-3);
     gap: var(--space-2);
   }
 
-  .task-title {
-    font-size: 14px;
+  .task-header-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
   }
 
+  .task-header-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .task-title {
+    font-size: 15px;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.4;
+  }
+
+  .task-header-actions {
+    flex-wrap: wrap;
+    justify-content: stretch;
+    gap: var(--space-2);
+  }
+
+  .task-header-actions .btn {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* 进度条 */
+  .top-progress-text {
+    font-size: 11px;
+  }
+
+  /* 侧边栏 */
+  .sidebar {
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .sidebar-inner {
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .sidebar-section {
+    min-width: 0;
+  }
+
+  /* 步骤导航 */
+  .step-item-compact {
+    align-items: flex-start;
+    min-height: auto;
+    padding: var(--space-2) var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .step-name-compact {
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  /* 交付产物 */
+  .output-item-compact {
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-2);
+  }
+
+  .output-title-compact {
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    font-size: 12px;
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+
+  .output-link-compact {
+    flex: 1 1 100%;
+    margin-left: 24px;
+  }
+
+  /* 主预览区 */
   .main-preview {
     padding: var(--space-2);
+    overflow-x: hidden;
+  }
+
+  /* 预览标签 */
+  .preview-tabs {
+    flex-direction: column;
+    gap: var(--space-1);
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .preview-tab {
+    width: 100%;
+    justify-content: space-between;
+    white-space: normal;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--line-light);
+    border-radius: var(--radius-md);
+  }
+
+  .preview-tab.is-selected::after {
+    display: none;
+  }
+
+  .preview-tab.is-selected {
+    border-color: var(--primary-border);
+    background: var(--primary-soft);
+  }
+
+  .preview-tab.slides.is-selected {
+    border-color: var(--artifact-slides-border);
+    background: var(--artifact-slides-soft);
+  }
+
+  .tab-title {
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    text-align: right;
+    flex: 1;
+    margin-left: var(--space-2);
+  }
+
+  .preview-panel-body {
+    overflow-x: hidden;
   }
 
   .preview-content-wrapper {
     padding: var(--space-3);
   }
 
+  /* 底部操作栏 */
+  .bottom-bar {
+    max-height: none;
+  }
+
   .bottom-bar-inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
   }
 
-  .action-stack {
+  .bottom-bar-info {
     flex-wrap: wrap;
-    justify-content: center;
+    gap: var(--space-1) var(--space-2);
   }
 
+  .bottom-bar-action {
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    font-size: 13px;
+    line-height: 1.4;
+    flex: 1 1 100%;
+  }
+
+  .bottom-bar-error {
+    white-space: normal;
+    word-break: break-word;
+    flex: 1 1 100%;
+  }
+
+  .bottom-bar-controls {
+    width: 100%;
+  }
+
+  /* 操作按钮 */
+  .action-stack {
+    flex-direction: column;
+    width: 100%;
+    gap: var(--space-2);
+  }
+
+  .action-stack.split {
+    flex-direction: column;
+  }
+
+  .action-stack .btn {
+    width: 100%;
+    min-height: 40px;
+  }
+
+  .confirmation-title,
+  .confirmation-description {
+    word-break: break-word;
+    overflow-wrap: break-word;
+    width: 100%;
+  }
+
+  /* 调整面板 */
+  .adjustments-panel-header,
+  .adjustments-panel-body {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .adjustment-control-select,
+  .adjustment-control-input,
+  .adjustment-control-textarea,
+  .adjustments-instruction-input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .adjustments-submit-btn {
+    align-self: stretch;
+    width: 100%;
+  }
+
+  /* 幻灯片 */
   .slide-grid {
     grid-template-columns: 1fr;
   }
 
-  .sidebar-inner {
-    flex-direction: column;
-    gap: var(--space-2);
+  .slide-card {
+    min-height: auto;
+    word-break: break-word;
+    overflow-wrap: break-word;
   }
 
-  .sidebar {
-    max-height: 160px;
+  /* 文档预览 */
+  .doc-preview,
+  .slides-preview {
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .doc-section-list section {
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+
+  /* 代码块 */
+  .doc-preview pre,
+  .slides-preview pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    max-height: 240px;
+  }
+
+  /* 空状态 */
+  .empty-state {
+    padding: var(--space-6) var(--space-3);
+  }
+
+  /* 通用标题 */
+  .section-title {
+    font-size: 13px;
   }
 }
 
