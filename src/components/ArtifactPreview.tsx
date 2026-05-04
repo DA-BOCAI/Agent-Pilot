@@ -7,14 +7,15 @@ import type { DocumentPreviewData, SlidePreviewData } from '../types/preview'
 
 type ArtifactPreviewProps = {
   artifact: Artifact
+  onOutlineChange?: (outline: Array<{ id: string; level: number; title: string }>) => void
 }
 
-export function ArtifactPreview({ artifact }: ArtifactPreviewProps) {
+export function ArtifactPreview({ artifact, onOutlineChange }: ArtifactPreviewProps) {
   const payload = getArtifactPayload(artifact)
 
   // 预览区只关心归一化后的 artifact 类型；未知或缺少 JSON 时走统一空态。
   if (artifact.type === 'doc' && payload && typeof payload === 'object') {
-    return <DocumentPreview data={payload as DocumentPreviewData} fallbackTitle={artifact.title} />
+    return <DocumentPreview data={payload as DocumentPreviewData} fallbackTitle={artifact.title} onOutlineChange={onOutlineChange} />
   }
 
   if (artifact.type === 'slides' && payload && typeof payload === 'object') {

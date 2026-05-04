@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   connectWorkspaceStream,
-  getTask,
   getWorkspace,
   planTask,
   confirmTask as requestConfirmTask,
@@ -10,6 +9,7 @@ import {
   confirmWorkspace,
   cancelWorkspace,
 } from '../api/tasks'
+import { workspaceToTaskView } from '../mappers/taskMapper'
 import { getConfirmStepId } from '../domain/taskLabels'
 import { getTaskIdFromUrl } from '../utils/urlParams'
 import type { TaskView, Workspace } from '../types/task'
@@ -48,6 +48,7 @@ export function useTaskWorkflow() {
     try {
       const ws = await getWorkspace(taskId)
       setWorkspace(ws)
+      setTask(workspaceToTaskView(ws))
       setSseConnected(false)
     } catch (fallbackError) {
       console.error('Fallback getWorkspace failed:', fallbackError)
@@ -63,12 +64,14 @@ export function useTaskWorkflow() {
       onSnapshot: (ws: Workspace) => {
         if (isUnmountedRef.current) return
         setWorkspace(ws)
+        setTask(workspaceToTaskView(ws))
         setSseConnected(true)
         reconnectAttemptsRef.current = 0
       },
       onWorkspace: (ws: Workspace) => {
         if (isUnmountedRef.current) return
         setWorkspace(ws)
+        setTask(workspaceToTaskView(ws))
         setSseConnected(true)
         reconnectAttemptsRef.current = 0
       },
@@ -102,8 +105,9 @@ export function useTaskWorkflow() {
 
     void runAction(async () => {
       try {
-        const existingTask = await getTask(taskId)
-        setTask(existingTask)
+        const existingWorkspace = await getWorkspace(taskId)
+        setWorkspace(existingWorkspace)
+        setTask(workspaceToTaskView(existingWorkspace))
         connectSSE(taskId)
       } catch {
         // 接口失败时不恢复任何数据，不显示内容
@@ -133,29 +137,35 @@ export function useTaskWorkflow() {
   }
 
   async function handlePlanTask() {
-    if (!task) return
+    const currentTaskId = workspace?.taskId ?? task?.taskId
+    if (!currentTaskId) return
     await runAction(async () => {
-      setTask(await planTask(task.taskId))
+      await planTask(currentTaskId)
+      const refreshedWorkspace = await getWorkspace(currentTaskId)
+      applyWorkspace(refreshedWorkspace)
+      setTask(workspaceToTaskView(refreshedWorkspace))
     })
   }
 
   async function handleConfirm(approved: boolean) {
-    if (!task || !confirmStepId) return
+    const currentTaskId = workspace?.taskId ?? task?.taskId
+    if (!currentTaskId || !confirmStepId) return
     await runAction(async () => {
-      setTask(await requestConfirmTask(task.taskId, approved, confirmStepId))
+      await requestConfirmTask(currentTaskId, approved, confirmStepId)
+      const refreshedWorkspace = await getWorkspace(currentTaskId)
+      applyWorkspace(refreshedWorkspace)
+      setTask(workspaceToTaskView(refreshedWorkspace))
     })
   }
 
   async function handleRefresh() {
-    if (!task) return
+    const currentTaskId = workspace?.taskId ?? task?.taskId
+    if (!currentTaskId) return
     await runAction(async () => {
       try {
-        const [refreshedTask, refreshedWorkspace] = await Promise.all([
-          getTask(task.taskId),
-          getWorkspace(task.taskId),
-        ])
-        setTask(refreshedTask)
+        const refreshedWorkspace = await getWorkspace(currentTaskId)
         applyWorkspace(refreshedWorkspace)
+        setTask(workspaceToTaskView(refreshedWorkspace))
       } catch {
         // 接口失败时不恢复任何数据，不显示内容
       }

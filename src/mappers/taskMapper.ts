@@ -13,6 +13,7 @@ import type {
   BackendAdjustments,
   BackendOutput,
   BackendTimelineEvent,
+  EventType,
   PlanStep,
   Step,
   StepStatus,
@@ -117,6 +118,53 @@ function getArtifactFallbackTitle(type: string) {
   if (normalized === 'doc') return '文档预览'
   if (normalized === 'slides') return '演示稿预览'
   return '预览'
+}
+
+export function workspaceToTaskView(workspace: Workspace): TaskView {
+  return {
+    taskId: workspace.taskId,
+    requestId: '',
+    source: workspace.source ?? 'im_text',
+    userId: workspace.userId ?? '',
+    inputText: workspace.inputSummary ?? '',
+    status: workspace.status,
+    nextAction: workspace.nextAction ?? 'none',
+    createdAt: workspace.createdAt ?? new Date().toISOString(),
+    updatedAt: workspace.updatedAt ?? workspace.createdAt ?? new Date().toISOString(),
+    planSteps: workspace.steps.map(stepToPlanStep),
+    artifacts: workspace.outputs.map(outputToArtifact),
+    events: workspace.timeline.map(timelineToTaskEvent),
+  }
+}
+
+function stepToPlanStep(step: Step): PlanStep {
+  return {
+    code: step.id,
+    name: step.title,
+    status: step.status,
+    requiresConfirm: step.requiresConfirm,
+    stepId: step.id,
+  }
+}
+
+function outputToArtifact(output: Output): Artifact {
+  const rawType = output.type ?? 'unknown'
+  return {
+    type: normalizeArtifactType(rawType),
+    title: output.title ?? getArtifactFallbackTitle(rawType),
+    url: output.url,
+    rawType,
+  }
+}
+
+function timelineToTaskEvent(event: TimelineEvent): TaskEvent {
+  return {
+    type: event.type as EventType,
+    message: event.message || event.title,
+    createdAt: event.timestamp,
+    stepCode: event.stepId ?? undefined,
+    metadata: event.metadata as Record<string, string> | undefined,
+  }
 }
 
 export function mapWorkspace(dto: BackendWorkspace): Workspace {

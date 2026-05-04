@@ -1,6 +1,7 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { ArtifactPreview } from './ArtifactPreview'
 import { EmptyState } from './EmptyState'
+import OutlinePanel from './OutlinePanel'
 import { getArtifactLabel } from '../domain/taskLabels'
 import type { Artifact, Preview } from '../types/task'
 
@@ -13,6 +14,10 @@ type PreviewPanelProps = {
 export function PreviewPanel({ artifacts, workspacePreview, isDelivered }: PreviewPanelProps) {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
+  const [outlineItems, setOutlineItems] = useState<Array<{ id: string; level: number; title: string }>>([])
+  const [activeOutlineId, setActiveOutlineId] = useState<string | undefined>()
+  const [outlineCollapsed, setOutlineCollapsed] = useState(false)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   const previewArtifacts = useMemo(() => {
     if (workspacePreview?.available && workspacePreview.data) {
@@ -31,8 +36,59 @@ export function PreviewPanel({ artifacts, workspacePreview, isDelivered }: Previ
   const handleSelect = useCallback((index: number) => {
     setIsLoading(true)
     setSelectedIndex(index)
+    setOutlineItems([])
+    setActiveOutlineId(undefined)
     setTimeout(() => setIsLoading(false), 200)
   }, [])
+
+  const handleOutlineChange = useCallback((items: Array<{ id: string; level: number; title: string }>) => {
+    setOutlineItems(items)
+    if (items.length > 0 && !activeOutlineId) {
+      setActiveOutlineId(items[0].id)
+    }
+  }, [activeOutlineId])
+
+  const handleOutlineItemClick = useCallback((id: string) => {
+    setActiveOutlineId(id)
+    const container = contentRef.current
+    const el = container?.querySelector(`#${CSS.escape(id)}`) as HTMLElement | null
+    if (container && el) {
+      const containerRect = container.getBoundingClientRect()
+      const elRect = el.getBoundingClientRect()
+      container.scrollTo({
+        top: container.scrollTop + elRect.top - containerRect.top - 16,
+        behavior: 'smooth',
+      })
+    }
+  }, [])
+
+  useEffect(() => {
+    const container = contentRef.current
+    if (!container || outlineItems.length === 0) return
+
+    const handleScroll = () => {
+      const headings = outlineItems
+        .map(item => ({ id: item.id, el: container.querySelector(`#${CSS.escape(item.id)}`) as HTMLElement | null }))
+        .filter(h => h.el !== null)
+
+      for (let i = headings.length - 1; i >= 0; i--) {
+        const rect = headings[i].el!.getBoundingClientRect()
+        const containerRect = container.getBoundingClientRect()
+        if (rect.top <= containerRect.top + 80) {
+          setActiveOutlineId(headings[i].id)
+          return
+        }
+      }
+      if (headings.length > 0) {
+        setActiveOutlineId(headings[0].id)
+      }
+    }
+
+    container.addEventListener('scroll', handleScroll)
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [outlineItems])
+
+  const isDocWithOutline = activeArtifact?.type === 'doc' && outlineItems.length > 0
 
   if (!previewArtifacts.length) {
     return (
@@ -82,9 +138,24 @@ export function PreviewPanel({ artifacts, workspacePreview, isDelivered }: Previ
             <span>正在加载预览…</span>
           </div>
         ) : activeArtifact ? (
-          <div className="preview-content-wrapper">
-            <ArtifactPreview artifact={activeArtifact} />
-          </div>
+          isDocWithOutline ? (
+            <div className="doc-preview-with-outline">
+              <div className="preview-content-wrapper" ref={contentRef}>
+                <ArtifactPreview artifact={activeArtifact} onOutlineChange={handleOutlineChange} />
+              </div>
+              <OutlinePanel
+                items={outlineItems}
+                activeId={activeOutlineId}
+                onItemClick={handleOutlineItemClick}
+                collapsed={outlineCollapsed}
+                onToggleCollapse={() => setOutlineCollapsed(c => !c)}
+              />
+            </div>
+          ) : (
+            <div className="preview-content-wrapper" ref={contentRef}>
+              <ArtifactPreview artifact={activeArtifact} onOutlineChange={handleOutlineChange} />
+            </div>
+          )
         ) : (
           <EmptyState title="无法预览" detail="当前文件暂无可预览内容。" />
         )}
