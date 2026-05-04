@@ -22,6 +22,7 @@ public class TaskView {
     String nextAction;
     Instant createdAt;
     Instant updatedAt;
+    TaskWorkspaceView.Progress progress;
     List<PlanStep> planSteps;
     List<Artifact> artifacts;
     List<TaskEvent> events;

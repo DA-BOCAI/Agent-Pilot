@@ -24,6 +24,9 @@ agent:
       enabled: ${AGENT_IM_REPLY_ENABLED:true}
     listener:
       enabled: ${AGENT_IM_LISTENER_ENABLED:true}
+    content:
+        ttl: 30m
+        max-messages: 8
   store:
     redis:
       enabled: ${AGENT_REDIS_ENABLED:true}
@@ -32,15 +35,14 @@ agent:
   tool:
     lark-cli-timeout: ${LARK_CLI_TIMEOUT:180s}
 
-# 豆包大模型配置（兼容OpenAI接口）
-langchain4j:
-  open-ai:
-    base-url: ${LLM_BASE_URL:https://ark.cn-beijing.volces.com/api/v3}
-    api-key: ${LLM_API_KEY:}
-    model-name: ${LLM_ENDPOINT_ID:}
-    temperature: ${LLM_TEMPERATURE:0.1}
-    connect-timeout: ${LLM_CONNECT_TIMEOUT:10s}
-    read-timeout: ${LLM_READ_TIMEOUT:300s}
+  llm:
+    open-ai:
+      base-url: ${LLM_BASE_URL:https://ark.cn-beijing.volces.com/api/v3}
+      api-key: ${LLM_API_KEY:}
+      model-name: ${LLM_ENDPOINT_ID:}
+      temperature: ${LLM_TEMPERATURE:0.1}
+      connect-timeout: ${LLM_CONNECT_TIMEOUT:10s}
+      read-timeout: ${LLM_READ_TIMEOUT:300s}
 
 
 

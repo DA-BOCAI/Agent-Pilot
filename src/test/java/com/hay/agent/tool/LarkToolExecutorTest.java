@@ -2,6 +2,7 @@ package com.hay.agent.tool;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hay.agent.domain.Artifact;
 import com.hay.agent.service.content.ContentGeneratorService;
 import com.hay.agent.service.presentation.LarkSlideXmlRenderer;
 import com.hay.agent.service.presentation.PresentationMarkdownParser;
@@ -24,7 +25,8 @@ class LarkToolExecutorTest {
             mock(ContentGeneratorService.class),
             new PresentationMarkdownParser(),
             new LarkSlideXmlRenderer(),
-            Duration.ofSeconds(1)
+            Duration.ofSeconds(1),
+            "https://workspace.example.com"
     );
 
     @Test
@@ -111,6 +113,17 @@ class LarkToolExecutorTest {
         assertEquals("项目目标", slides.get(0).getTitle());
         assertEquals("bullets", slides.get(0).getBlocks().get(0).getType());
         assertEquals("GMV破3亿", slides.get(0).getBlocks().get(0).getItems().get(0));
+    }
+
+    @Test
+    void deliverResultShouldPointToWorkspaceTask() throws Exception {
+        @SuppressWarnings("unchecked")
+        java.util.Optional<Artifact> artifact = (java.util.Optional<Artifact>) invoke("deliverResult", new Class<?>[]{String.class}, "task-1");
+
+        assertTrue(artifact.isPresent());
+        assertEquals("delivery", artifact.get().getType());
+        assertEquals("F_DELIVER", artifact.get().getStepId());
+        assertEquals("https://workspace.example.com?taskId=task-1", artifact.get().getUrl());
     }
 
     private Object invoke(String methodName, Class<?>[] paramTypes, Object... args) throws Exception {

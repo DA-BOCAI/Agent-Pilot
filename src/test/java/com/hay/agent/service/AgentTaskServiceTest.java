@@ -5,6 +5,7 @@ import com.hay.agent.api.dto.CreateTaskRequest;
 import com.hay.agent.api.dto.GenerateStepPreviewRequest;
 import com.hay.agent.api.dto.RefineStepPreviewRequest;
 import com.hay.agent.api.dto.UpdateStepPreviewRequest;
+import com.hay.agent.api.dto.preview.DocumentPreviewResponse;
 import com.hay.agent.api.dto.preview.PresentationPreviewResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -165,12 +166,18 @@ class AgentTaskServiceTest {
 
         UpdateStepPreviewRequest updateRequest = new UpdateStepPreviewRequest();
         updateRequest.setPreviewData(previewData);
+        updateRequest.setSource("workspace");
+        updateRequest.setClientId("desktop-web");
         task = agentTaskService.updateStepPreview(task.getTaskId(), "D_SLIDES", updateRequest);
 
         assertEquals(TaskStatus.WAIT_CONFIRM, task.getStatus());
         assertEquals("business", task.getPlanSteps().get(0).getPreviewData().path("theme").asText());
+        assertEquals(2, task.getPlanSteps().get(0).getPreviewData().path("revision").asInt());
+        assertEquals("manual_update", task.getPlanSteps().get(0).getPreviewData().path("lastEditType").asText());
         assertEquals("用户改过的PPT", task.getArtifacts().get(0).getTitle());
         assertEquals("business", task.getArtifacts().get(0).getPreviewData().path("theme").asText());
+        assertEquals("workspace", task.getEvents().get(task.getEvents().size() - 1).getMetadata().get("source"));
+        assertEquals("desktop-web", task.getEvents().get(task.getEvents().size() - 1).getMetadata().get("clientId"));
     }
 
     @Test
@@ -223,11 +230,17 @@ class AgentTaskServiceTest {
 
         RefineStepPreviewRequest refineRequest = new RefineStepPreviewRequest();
         refineRequest.setInstruction("改成商务稳重风格，标题为双十一增长作战方案");
+        refineRequest.setSource("workspace");
+        refineRequest.setClientId("mobile-web");
         task = agentTaskService.refineStepPreview(task.getTaskId(), "D_SLIDES", refineRequest);
 
         assertEquals(TaskStatus.WAIT_CONFIRM, task.getStatus());
         assertEquals("business", task.getPlanSteps().get(0).getPreviewData().path("theme").asText());
         assertEquals("双十一增长作战方案", task.getPlanSteps().get(0).getPreviewData().path("title").asText());
+        assertEquals(2, task.getPlanSteps().get(0).getPreviewData().path("revision").asInt());
+        assertEquals("natural_language_refine", task.getPlanSteps().get(0).getPreviewData().path("lastEditType").asText());
+        assertEquals("workspace", task.getEvents().get(task.getEvents().size() - 1).getMetadata().get("source"));
+        assertEquals("mobile-web", task.getEvents().get(task.getEvents().size() - 1).getMetadata().get("clientId"));
         assertEquals("双十一增长作战方案", task.getArtifacts().get(0).getTitle());
         assertEquals("改成商务稳重风格，标题为双十一增长作战方案",
                 task.getArtifacts().get(0).getPreviewData().path("lastRefineInstruction").asText());
@@ -307,6 +320,65 @@ class AgentTaskServiceTest {
         assertEquals(StepStatus.WAIT_CONFIRM, task.getPlanSteps().get(0).getStatus());
         assertEquals("business", task.getPlanSteps().get(0).getPreviewData().path("theme").asText());
         assertEquals("slides-preview", task.getArtifacts().get(0).getType());
+    }
+
+    @Test
+    void shouldStampDocToPptCompositionMetadataOnSlidesPreview() {
+        when(planner.plan(anyString())).thenReturn(List.of(
+                PlanStep.builder().stepId("C_DOC").scene("C").action("生成校招方案文档").tool("lark-doc").requiresConfirm(true).status(StepStatus.PENDING).build(),
+                PlanStep.builder().stepId("D_SLIDES").scene("D").action("基于前序方案文档生成演示文稿").tool("lark-slides").requiresConfirm(true).status(StepStatus.PENDING).build()
+        ));
+        when(toolExecutor.execute(any(), anyString(), anyString())).thenReturn(Optional.empty());
+        when(contentPreviewService.previewDocument(any())).thenReturn(DocumentPreviewResponse.builder()
+                .artifactType("DOCUMENT")
+                .title("校招方案文档")
+                .rawMarkdown("# 校招方案\n## 岗位亮点\n强调培养机制")
+                .outline(List.of())
+                .sections(List.of())
+                .warnings(List.of())
+                .build());
+        when(contentPreviewService.previewPresentation(any())).thenReturn(PresentationPreviewResponse.builder()
+                .artifactType("PRESENTATION")
+                .title("校招宣讲PPT")
+                .theme("business")
+                .pageCount(1)
+                .slides(List.of())
+                .warnings(List.of())
+                .build());
+
+        CreateTaskRequest create = new CreateTaskRequest();
+        create.setInputText("生成一份校招宣讲PPT，包含岗位亮点和培养机制");
+        create.setUserId("u-test-08");
+        create.setRequestId("req-test-08");
+
+        AgentTask task = agentTaskService.createTask(create);
+        task = agentRunner.runUntilBlocked(task.getTaskId());
+
+        ConfirmTaskRequest confirmDocIntent = new ConfirmTaskRequest();
+        confirmDocIntent.setStepId("C_DOC");
+        confirmDocIntent.setApproved(true);
+        agentTaskService.confirmStep(task.getTaskId(), confirmDocIntent);
+        task = agentRunner.runUntilBlocked(task.getTaskId());
+
+        ConfirmTaskRequest confirmDocPreview = new ConfirmTaskRequest();
+        confirmDocPreview.setStepId("C_DOC");
+        confirmDocPreview.setApproved(true);
+        agentTaskService.confirmStep(task.getTaskId(), confirmDocPreview);
+        task = agentRunner.runUntilBlocked(task.getTaskId());
+
+        ConfirmTaskRequest confirmSlidesIntent = new ConfirmTaskRequest();
+        confirmSlidesIntent.setStepId("D_SLIDES");
+        confirmSlidesIntent.setApproved(true);
+        task = agentTaskService.confirmStep(task.getTaskId(), confirmSlidesIntent);
+        task = agentRunner.runUntilBlocked(task.getTaskId());
+
+        ObjectNode slidesPreviewData = (ObjectNode) task.getPlanSteps().get(1).getPreviewData();
+        assertEquals("doc_to_ppt", slidesPreviewData.at("/composition/mode").asText());
+        assertEquals("C_DOC", slidesPreviewData.at("/composition/source/stepId").asText());
+        assertEquals("校招方案文档", slidesPreviewData.at("/composition/source/title").asText());
+        assertEquals(1, slidesPreviewData.at("/composition/source/revision").asInt());
+        assertEquals("doc_to_ppt", task.getEvents().get(task.getEvents().size() - 1).getMetadata().get("composition"));
+        assertEquals("C_DOC", task.getEvents().get(task.getEvents().size() - 1).getMetadata().get("sourceStepId"));
     }
 }
 

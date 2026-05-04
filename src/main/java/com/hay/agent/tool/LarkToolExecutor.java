@@ -33,7 +33,7 @@ import java.util.regex.Pattern;
 
 
 @Slf4j
-@Primary        //MOCK过渡期~
+@Primary
 @Component
 public class LarkToolExecutor implements ToolExecutor {
 
@@ -43,17 +43,20 @@ public class LarkToolExecutor implements ToolExecutor {
     private final LarkSlideXmlRenderer larkSlideXmlRenderer;
     private static final String LARK_CLI_PATH = "C:\\Users\\Swiftie\\AppData\\Roaming\\npm\\node_modules\\@larksuite\\cli\\scripts\\run.js";
     private final Duration larkCliTimeout;
+    private final String workspaceUrl;
 
     public LarkToolExecutor(ObjectMapper objectMapper,
                             ContentGeneratorService contentGeneratorService,
                             PresentationMarkdownParser presentationMarkdownParser,
                             LarkSlideXmlRenderer larkSlideXmlRenderer,
-                            @Value("${agent.tool.lark-cli-timeout:180s}") Duration larkCliTimeout) {
+                            @Value("${agent.tool.lark-cli-timeout:180s}") Duration larkCliTimeout,
+                            @Value("${agent.im.workspace-url:https://agent-pilot-nine.vercel.app}") String workspaceUrl) {
         this.objectMapper = objectMapper;
         this.contentGeneratorService = contentGeneratorService;
         this.presentationMarkdownParser = presentationMarkdownParser;
         this.larkSlideXmlRenderer = larkSlideXmlRenderer;
         this.larkCliTimeout = larkCliTimeout;
+        this.workspaceUrl = normalizeWorkspaceUrl(workspaceUrl);
     }
 
     @Override
@@ -96,6 +99,7 @@ public class LarkToolExecutor implements ToolExecutor {
 
             return Optional.of(Artifact.builder()
                     .type("docs")
+                    .stepId(step.getStepId())
                     .title(title)
                     .url(docUrl)
                     .build());
@@ -133,10 +137,6 @@ public class LarkToolExecutor implements ToolExecutor {
                     ? readPreviewSlides(previewData)
                     : presentationMarkdownParser.parse(pptContent, title);
 
-            if (slides.size() > 10) {
-                throw new IllegalStateException("PPT页数超过Lark CLI单次创建上限10页，当前页数=" + slides.size() + "，请先缩减内容或后续拆分创建");
-            }
-
             JsonNode createJson = executeCliJson(List.of(
                     LARK_CLI_PATH,
                     "slides", "+create",
@@ -170,6 +170,7 @@ public class LarkToolExecutor implements ToolExecutor {
             
             return Optional.of(Artifact.builder()
                     .type("slides")
+                    .stepId(step.getStepId())
                     .title(title)
                     .url(slidesUrl)
                     .build());
@@ -194,9 +195,18 @@ public class LarkToolExecutor implements ToolExecutor {
     private Optional<Artifact> deliverResult(String taskId) {
         return Optional.of(Artifact.builder()
                 .type("delivery")
+                .stepId("F_DELIVER")
                 .title("交付包-" + taskId)
-                .url("http://localhost:8080/api/tasks/" + taskId)
+                .url(workspaceUrl + "?taskId=" + taskId)
                 .build());
+    }
+
+    private String normalizeWorkspaceUrl(String value) {
+        String fallback = "https://agent-pilot-nine.vercel.app";
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        return value.replaceAll("[?&]+$", "");
     }
 
     /**
@@ -514,6 +524,7 @@ public class LarkToolExecutor implements ToolExecutor {
             slides.add(PresentationSlide.builder()
                     .slideNo(slideNode.path("slideNo").asInt(i + 1))
                     .title(slideNode.path("title").asText("第" + (i + 1) + "页"))
+                    .layout(slideNode.path("layout").asText(null))
                     .blocks(readPreviewBlocks(slideNode.path("blocks")))
                     .build());
         }

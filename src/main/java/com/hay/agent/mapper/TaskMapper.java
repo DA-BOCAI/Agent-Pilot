@@ -31,7 +31,9 @@ public class TaskMapper {
                 .createdAt(task.getCreatedAt())
                 .updatedAt(task.getUpdatedAt())
                 .planSteps(task.getPlanSteps())
-                .artifacts(task.getArtifacts())
+                .artifacts(task.getArtifacts().stream()
+                        .filter(this::isPublicDeliveryArtifact)
+                        .toList())
                 .events(task.getEvents())
                 .build();
     }
@@ -50,6 +52,11 @@ public class TaskMapper {
     public TaskWorkspaceView toWorkspaceView(AgentTask task) {
         String title = resolveTaskTitle(task);
         TaskWorkspaceView.Preview preview = toCurrentPreview(task);
+        TaskWorkspaceView.Progress progress = toWorkspaceProgress(task, preview);
+        List<TaskWorkspaceView.Output> outputs = task.getArtifacts().stream()
+                .filter(this::isPublicDeliveryArtifact)
+                .map(this::toWorkspaceOutput)
+                .toList();
         return TaskWorkspaceView.builder()
                 .taskId(task.getTaskId())
                 .title(title)
@@ -57,21 +64,21 @@ public class TaskMapper {
                 .displayStatus(displayTaskStatus(task))
                 .nextAction(task.getNextAction())
                 .source(task.getSource())
+                .sourceDisplay(displayTaskSource(task.getSource()))
                 .userId(task.getUserId())
                 .createdAt(task.getCreatedAt())
                 .updatedAt(task.getUpdatedAt())
                 .inputSummary(summarizeTitle(task.getInputText()))
                 .contextText(task.getInputText())
                 .steps(task.getPlanSteps().stream().map(step -> toWorkspaceStep(task, step)).toList())
+                .progress(progress)
                 .confirmation(toWorkspaceConfirmation(task, preview))
                 .preview(preview)
                 .adjustments(toWorkspaceAdjustments(task, preview))
-                .outputs(task.getArtifacts().stream()
-                        .filter(artifact -> !isPreviewArtifact(artifact))
-                        .map(this::toWorkspaceOutput)
-                        .toList())
+                .outputs(outputs)
                 .timeline(task.getEvents().stream().map(this::toWorkspaceTimelineEvent).toList())
-                .debugTask(toView(task))
+                .sync(toWorkspaceSync(task))
+                .diagnostics(toWorkspaceDiagnostics(task, preview, progress, outputs))
                 .build();
     }
 
@@ -83,9 +90,103 @@ public class TaskMapper {
                 .name(summarizeTitle(step.getAction()))
                 .action(step.getAction())
                 .status(status)
-                .displayStatus(displayStatus(step.getStatus()))
+                .displayStatus(displayWorkspaceStepStatus(step))
+                .phase(workspaceStepPhase(step))
                 .requiresConfirm(step.isRequiresConfirm())
                 .active(isActiveStep(task, step))
+                .build();
+    }
+
+    private TaskWorkspaceView.Progress toWorkspaceProgress(AgentTask task, TaskWorkspaceView.Preview preview) {
+        if (isCancelled(task)) {
+            return progress(100, 6, "cancelled", "已取消");
+        }
+        if (task.getStatus() == TaskStatus.FAILED) {
+            return progress(100, 6, "failed", "失败");
+        }
+        if (task.getStatus() == TaskStatus.DELIVERED) {
+            return progress(100, 6, "delivered", "已完成");
+        }
+
+        Optional<PlanStep> waitingStep = task.getPlanSteps().stream()
+                .filter(step -> step.getStatus() == StepStatus.WAIT_CONFIRM)
+                .findFirst();
+        if (waitingStep.isPresent()) {
+            PlanStep step = waitingStep.get();
+            boolean laterArtifactStage = hasCompletedArtifactWorkBefore(task, step);
+            if (hasPreviewData(step)) {
+                if (laterArtifactStage) {
+                    return progress(85, 5, "confirm2", "后续预览待确认");
+                }
+                return progress(60, 4, "confirm2", "预览待确认");
+            }
+            if (laterArtifactStage) {
+                return progress(70, 5, "confirm1", "后续产物需求待确认");
+            }
+            return progress(40, 3, "confirm1", "需求待确认");
+        }
+
+        boolean hasApprovedPreviewStep = task.getPlanSteps().stream()
+                .anyMatch(step -> step.getStatus() == StepStatus.APPROVED && !hasPreviewData(step));
+        if (hasApprovedPreviewStep) {
+            boolean laterArtifactStage = task.getPlanSteps().stream()
+                    .filter(step -> step.getStatus() == StepStatus.APPROVED && !hasPreviewData(step))
+                    .findFirst()
+                    .map(step -> hasCompletedArtifactWorkBefore(task, step))
+                    .orElse(false);
+            if (laterArtifactStage) {
+                return progress(75, 5, "preview_generating", "正在生成后续预览");
+            }
+            return progress(50, 3, "preview_generating", "正在生成预览");
+        }
+
+        boolean hasRunningStep = task.getPlanSteps().stream()
+                .anyMatch(step -> step.getStatus() == StepStatus.RUNNING);
+        if (hasRunningStep || task.getStatus() == TaskStatus.RUNNING) {
+            int percent = preview != null && preview.isAvailable() ? 80 : 25;
+            int phaseIndex = preview != null && preview.isAvailable() ? 5 : 2;
+            return progress(percent, phaseIndex, "running", "执行中");
+        }
+
+        if (task.getStatus() == TaskStatus.PLANNED || !task.getPlanSteps().isEmpty()) {
+            return progress(25, 2, "planned", "计划已生成");
+        }
+        if (task.getStatus() == TaskStatus.CREATED) {
+            return progress(10, 1, "created", "任务已创建");
+        }
+        return progress(0, 0, "unknown", "等待同步");
+    }
+
+    private boolean hasCompletedArtifactWorkBefore(AgentTask task, PlanStep currentStep) {
+        if (task == null || currentStep == null) {
+            return false;
+        }
+        int currentIndex = task.getPlanSteps().indexOf(currentStep);
+        if (currentIndex <= 0) {
+            return false;
+        }
+        for (int i = 0; i < currentIndex; i++) {
+            PlanStep previousStep = task.getPlanSteps().get(i);
+            if (previousStep.getStatus() == StepStatus.DONE || hasPreviewData(previousStep)) {
+                return true;
+            }
+            String previousStepId = previousStep.getStepId();
+            boolean hasArtifact = task.getArtifacts().stream()
+                    .anyMatch(artifact -> previousStepId != null && previousStepId.equals(artifact.getStepId()));
+            if (hasArtifact) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private TaskWorkspaceView.Progress progress(int percent, int phaseIndex, String phase, String label) {
+        return TaskWorkspaceView.Progress.builder()
+                .percent(percent)
+                .phaseIndex(phaseIndex)
+                .totalPhases(6)
+                .phase(phase)
+                .label(label)
                 .build();
     }
 
@@ -181,7 +282,7 @@ public class TaskMapper {
         }
 
         PlanStep step = waitingStep.get();
-        String endpoint = "/api/v1/tasks/" + task.getTaskId() + "/steps/" + step.getStepId() + "/preview";
+        String endpoint = "/api/v1/tasks/" + task.getTaskId() + "/workspace/steps/" + step.getStepId() + "/preview";
         List<TaskWorkspaceView.AdjustmentAction> actions = "slides".equals(preview.getType())
                 ? List.of(
                 adjustment("theme", "切换主题", "select", "preview.data.theme",
@@ -234,22 +335,77 @@ public class TaskMapper {
                 .type("instruction")
                 .target("preview.data")
                 .options(List.of())
-                .endpoint("/api/v1/tasks/" + taskId + "/steps/" + stepId + "/preview/refine")
+                .endpoint("/api/v1/tasks/" + taskId + "/workspace/steps/" + stepId + "/preview/refine")
                 .method("POST")
                 .build();
     }
 
     private TaskWorkspaceView.TimelineEvent toWorkspaceTimelineEvent(TaskEvent event) {
         String type = event.getType() == null ? "TASK_EVENT" : event.getType();
+        Map<String, String> metadata = event.getMetadata() == null ? Map.of() : event.getMetadata();
+        String source = metadata.getOrDefault("source", inferEventSource(type));
         return TaskWorkspaceView.TimelineEvent.builder()
                 .timestamp(event.getTimestamp())
                 .type(type)
                 .title(eventTitle(type))
                 .message(event.getMessage())
                 .level(eventLevel(type))
-                .stepId(event.getMetadata() == null ? null : event.getMetadata().get("stepId"))
-                .metadata(event.getMetadata() == null ? Map.of() : event.getMetadata())
+                .stepId(metadata.get("stepId"))
+                .source(source)
+                .sourceDisplay(displayEventSource(source))
+                .metadata(metadata)
                 .build();
+    }
+
+    private TaskWorkspaceView.Sync toWorkspaceSync(AgentTask task) {
+        String taskId = task.getTaskId();
+        return TaskWorkspaceView.Sync.builder()
+                .realtimeEnabled(true)
+                .snapshotEndpoint("/api/v1/tasks/" + taskId + "/workspace")
+                .streamEndpoint("/api/v1/tasks/" + taskId + "/workspace/stream")
+                .lastEventId(task.getUpdatedAt() == null ? "" : task.getUpdatedAt().toString())
+                .serverTime(java.time.Instant.now())
+                .reconnectAfterMillis(3000)
+                .build();
+    }
+
+    private TaskWorkspaceView.Diagnostics toWorkspaceDiagnostics(AgentTask task,
+                                                                 TaskWorkspaceView.Preview preview,
+                                                                 TaskWorkspaceView.Progress progress,
+                                                                 List<TaskWorkspaceView.Output> outputs) {
+        JsonNode previewData = preview == null ? null : preview.getData();
+        List<String> previewWarnings = readStringArray(previewData == null ? null : previewData.path("warnings"));
+        Integer slidePageCount = previewData != null && "PRESENTATION".equalsIgnoreCase(previewData.path("artifactType").asText(""))
+                ? previewData.path("pageCount").asInt(0)
+                : null;
+        int hiddenInternalArtifactCount = (int) task.getArtifacts().stream()
+                .filter(artifact -> !isPublicDeliveryArtifact(artifact))
+                .count();
+        return TaskWorkspaceView.Diagnostics.builder()
+                .progressSource("backend_authoritative")
+                .progressPercent(progress.getPercent())
+                .progressPhase(progress.getPhase())
+                .publicOutputCount(outputs == null ? 0 : outputs.size())
+                .hiddenInternalArtifactCount(hiddenInternalArtifactCount)
+                .previewWarningCount(previewWarnings.size())
+                .previewWarnings(previewWarnings)
+                .slidePageCount(slidePageCount)
+                .shouldUseBackendProgress(true)
+                .build();
+    }
+
+    private List<String> readStringArray(JsonNode node) {
+        if (node == null || !node.isArray() || node.isEmpty()) {
+            return List.of();
+        }
+        java.util.ArrayList<String> values = new java.util.ArrayList<>();
+        for (JsonNode item : node) {
+            String value = item.asText("");
+            if (!value.isBlank()) {
+                values.add(value);
+            }
+        }
+        return values;
     }
 
     private String resolveTaskTitle(AgentTask task) {
@@ -275,9 +431,13 @@ public class TaskMapper {
         if (text == null || text.isBlank()) {
             return "Agent 任务";
         }
-        String cleaned = text
+        String source = extractSection(text, "【用户明确需求】")
+                .orElseGet(() -> extractSection(text, "【IM后续补充信息】")
+                        .orElse(text));
+        String cleaned = source
                 .replaceFirst("^用户明确需求[:：]", "")
                 .replaceFirst("^IM 补充信息[:：]", "")
+                .replaceFirst("^补充内容[:：]", "")
                 .replaceAll("@_user_\\d+", "")
                 .replaceAll("\\s+", " ")
                 .trim();
@@ -285,6 +445,19 @@ public class TaskMapper {
             return "Agent 任务";
         }
         return cleaned.length() <= 32 ? cleaned : cleaned.substring(0, 32) + "...";
+    }
+
+    private Optional<String> extractSection(String text, String sectionTitle) {
+        int start = text.indexOf(sectionTitle);
+        if (start < 0) {
+            return Optional.empty();
+        }
+        int contentStart = start + sectionTitle.length();
+        String remaining = text.substring(contentStart);
+        int nextSection = remaining.indexOf("【");
+        String section = nextSection >= 0 ? remaining.substring(0, nextSection) : remaining;
+        String cleaned = section.trim();
+        return cleaned.isBlank() ? Optional.empty() : Optional.of(cleaned);
     }
 
     private TaskCardView.StepProgress toStepProgress(PlanStep step) {
@@ -334,7 +507,7 @@ public class TaskMapper {
         boolean finished = task.getStatus() == TaskStatus.DELIVERED;
         boolean failed = task.getStatus() == TaskStatus.FAILED;
         List<TaskCardView.LinkItem> links = task.getArtifacts().stream()
-                .filter(artifact -> artifact.getUrl() != null && !artifact.getUrl().startsWith("preview://"))
+                .filter(this::isPublicDeliveryArtifact)
                 .map(this::toLinkItem)
                 .toList();
 
@@ -379,6 +552,35 @@ public class TaskMapper {
         return status.name();
     }
 
+    private String displayWorkspaceStepStatus(PlanStep step) {
+        if (step != null && step.getStatus() == StepStatus.WAIT_CONFIRM && hasPreviewData(step)) {
+            return "预览待确认";
+        }
+        if (step != null && step.getStatus() == StepStatus.APPROVED && !hasPreviewData(step)) {
+            return "需求已确认，生成预览中";
+        }
+        return displayStatus(step == null ? null : step.getStatus());
+    }
+
+    private String workspaceStepPhase(PlanStep step) {
+        if (step == null) {
+            return "unknown";
+        }
+        if (step.getStatus() == StepStatus.WAIT_CONFIRM && hasPreviewData(step)) {
+            return "confirm2";
+        }
+        if (step.getStatus() == StepStatus.WAIT_CONFIRM) {
+            return "confirm1";
+        }
+        if (step.getStatus() == StepStatus.APPROVED && !hasPreviewData(step)) {
+            return "preview_generating";
+        }
+        if (step.getStatus() == StepStatus.APPROVED) {
+            return "confirmed";
+        }
+        return step.getStatus() == null ? "pending" : step.getStatus().name().toLowerCase();
+    }
+
     private String displayTaskStatus(AgentTask task) {
         if (isCancelled(task)) {
             return "已取消";
@@ -403,6 +605,61 @@ public class TaskMapper {
             return "失败";
         }
         return status == null ? "未知" : status.name();
+    }
+
+    private String displayTaskSource(String source) {
+        if (source == null || source.isBlank()) {
+            return "未知入口";
+        }
+        if (source.startsWith("IM:group:")) {
+            return "飞书群聊";
+        }
+        if (source.startsWith("IM:p2p:")) {
+            return "飞书单聊";
+        }
+        if (source.startsWith("IM:")) {
+            return "飞书 IM";
+        }
+        if ("workspace".equalsIgnoreCase(source)) {
+            return "工作台";
+        }
+        return source;
+    }
+
+    private String inferEventSource(String type) {
+        if (type == null) {
+            return "agent";
+        }
+        if (type.startsWith("TASK_") || type.startsWith("STEP_RUNNING") || type.startsWith("STEP_DONE")
+                || type.startsWith("STEP_WAIT_CONFIRM") || type.startsWith("STEP_PREVIEW_READY")) {
+            return "agent";
+        }
+        if (type.startsWith("STEP_PREVIEW_UPDATED") || type.startsWith("STEP_PREVIEW_REFINED")) {
+            return "workspace";
+        }
+        if (type.startsWith("IM_")) {
+            return "im";
+        }
+        return "user";
+    }
+
+    private String displayEventSource(String source) {
+        if ("workspace".equalsIgnoreCase(source)) {
+            return "工作台";
+        }
+        if ("lark_card".equalsIgnoreCase(source)) {
+            return "飞书卡片";
+        }
+        if ("im".equalsIgnoreCase(source)) {
+            return "飞书 IM";
+        }
+        if ("agent".equalsIgnoreCase(source)) {
+            return "Agent";
+        }
+        if ("user".equalsIgnoreCase(source)) {
+            return "用户";
+        }
+        return source == null || source.isBlank() ? "未知来源" : source;
     }
 
     private boolean isCancelled(AgentTask task) {
@@ -473,17 +730,29 @@ public class TaskMapper {
     }
 
     private String displayOutputType(String artifactType) {
-        if ("doc".equalsIgnoreCase(artifactType) || "document".equalsIgnoreCase(artifactType)) {
+        if ("doc".equalsIgnoreCase(artifactType) || "docs".equalsIgnoreCase(artifactType)
+                || "document".equalsIgnoreCase(artifactType)) {
             return "doc";
         }
         if ("slides".equalsIgnoreCase(artifactType) || "ppt".equalsIgnoreCase(artifactType)
                 || "presentation".equalsIgnoreCase(artifactType)) {
             return "slides";
         }
+        if ("delivery".equalsIgnoreCase(artifactType)) {
+            return "workspace";
+        }
         return artifactType;
     }
 
     private boolean isPreviewArtifact(Artifact artifact) {
         return artifact.getType() != null && artifact.getType().endsWith("-preview");
+    }
+
+    private boolean isPublicDeliveryArtifact(Artifact artifact) {
+        return artifact != null
+                && artifact.getUrl() != null
+                && !artifact.getUrl().startsWith("preview://")
+                && !isPreviewArtifact(artifact)
+                && !"delivery".equalsIgnoreCase(artifact.getType());
     }
 }

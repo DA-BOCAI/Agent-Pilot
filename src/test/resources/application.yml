@@ -13,13 +13,11 @@ agent:
     auto-run: false
   tool:
     lark-cli-timeout: 180s
-
-langchain4j:
-  open-ai:
-    base-url: https://ark.cn-beijing.volces.com/api/v3
-    api-key: ${LLM_API_KEY:}
-    model-name: ${LLM_ENDPOINT_ID:}
-    temperature: 0.1
-    connect-timeout: 10s
-    read-timeout: 300s
-    stream: true
+  llm:
+    open-ai:
+      base-url: https://ark.cn-beijing.volces.com/api/v3
+      api-key: ${LLM_API_KEY:}
+      model-name: ${LLM_ENDPOINT_ID:}
+      temperature: 0.1
+      connect-timeout: 10s
+      read-timeout: 300s

@@ -23,5 +23,11 @@ public class ConfirmTaskRequest {
 
     @Schema(description = "确认备注",example = "同意执行该步骤，理由是...")
     private String comment;
+
+    @Schema(description = "操作来源，用于多端同步展示；例如 workspace、lark_card", example = "workspace")
+    private String source;
+
+    @Schema(description = "前端客户端标识，用于区分移动端或桌面端操作来源", example = "mobile-web")
+    private String clientId;
 }
 

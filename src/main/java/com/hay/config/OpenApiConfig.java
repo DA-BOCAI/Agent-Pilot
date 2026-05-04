@@ -35,12 +35,19 @@ public class OpenApiConfig {
             }
 
             updatePost(openApi, "/api/v1/tasks", "创建任务", "根据输入文本创建一个任务实例");
-            updatePost(openApi, "/api/v1/tasks/{taskId}/plan", "生成规划", "为指定任务生成可执行步骤清单");
-            updatePost(openApi, "/api/v1/tasks/{taskId}/execute", "执行任务", "从当前进度继续执行，直到完成或遇到下一个确认闸门");
-            updatePost(openApi, "/api/v1/tasks/{taskId}/confirm", "确认步骤", "对需要人工确认的步骤进行通过或拒绝");
-            updatePost(openApi, "/api/v1/tasks/{taskId}/confirm-and-run", "确认并继续推进", "确认当前步骤后，由 Agent Runner 自动推进到完成或下一个确认闸门");
+            updatePost(openApi, "/api/v1/tasks/{taskId}/plan", "生成规划（调试）", "调试/兼容入口；IM 演示主线通常由 Agent Runner 自动调用");
+            updatePost(openApi, "/api/v1/tasks/{taskId}/execute", "执行任务（调试）", "调试/兼容入口；从当前进度继续执行，直到完成或遇到下一个确认闸门");
+            updatePost(openApi, "/api/v1/tasks/{taskId}/run", "自动推进任务（调试）", "调试/兼容入口；由 Agent Runner 自动推进任务");
+            updatePost(openApi, "/api/v1/tasks/{taskId}/confirm", "确认步骤（Legacy）", "兼容旧调试入口；工作台前端请使用 /workspace/confirm");
+            updatePost(openApi, "/api/v1/tasks/{taskId}/confirm-and-run", "确认并继续推进（Legacy）", "兼容旧调试入口；工作台前端请使用 /workspace/confirm");
+            updatePost(openApi, "/api/v1/tasks/{taskId}/workspace/confirm", "工作台确认并继续推进", "工作台确认当前步骤后，统一推进 Agent 链路，并同步更新飞书数字卡片");
+            updatePost(openApi, "/api/v1/tasks/{taskId}/workspace/cancel", "工作台取消任务", "工作台取消当前确认步骤或任务，并同步更新飞书数字卡片");
+            updatePut(openApi, "/api/v1/tasks/{taskId}/workspace/steps/{stepId}/preview", "工作台更新步骤预览", "保存工作台编辑后的结构化预览数据，并返回完整工作台快照");
+            updatePost(openApi, "/api/v1/tasks/{taskId}/workspace/steps/{stepId}/preview/refine", "工作台自然语言精修预览", "根据用户自然语言修改当前预览数据，并返回完整工作台快照");
             updatePost(openApi, "/api/v1/lark/cards/callback", "处理飞书消息卡片回调", "用于确认、取消、跳转工作台等消息卡片交互");
             updateGet(openApi, "/api/v1/tasks/{taskId}", "查询任务详情", "返回任务状态、步骤、产物和事件信息");
+            updateGet(openApi, "/api/v1/tasks/{taskId}/workspace", "查询任务工作台快照", "返回工作台首屏渲染所需的完整快照");
+            updateGet(openApi, "/api/v1/tasks/{taskId}/workspace/stream", "订阅任务工作台实时更新", "通过 SSE 推送最新工作台快照");
             updateGet(openApi, "/api/v1/tasks/{taskId}/events", "查询任务事件", "返回任务执行过程中的完整事件时间线");
         };
     }
@@ -54,6 +61,15 @@ public class OpenApiConfig {
         openApi.getPaths().get(path).getPost().setTags(java.util.List.of(path.startsWith("/api/v1/lark/")
                 ? "飞书卡片回调接口"
                 : "任务编排接口"));
+    }
+
+    private void updatePut(OpenAPI openApi, String path, String summary, String description) {
+        if (openApi.getPaths().get(path) == null || openApi.getPaths().get(path).getPut() == null) {
+            return;
+        }
+        openApi.getPaths().get(path).getPut().setSummary(summary);
+        openApi.getPaths().get(path).getPut().setDescription(description);
+        openApi.getPaths().get(path).getPut().setTags(java.util.List.of("任务编排接口"));
     }
 
     private void updateGet(OpenAPI openApi, String path, String summary, String description) {

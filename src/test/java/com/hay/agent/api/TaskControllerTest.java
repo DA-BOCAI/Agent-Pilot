@@ -77,7 +77,7 @@ class TaskControllerTest {
                 .andExpect(jsonPath("$.timeline").isArray())
                 .andExpect(jsonPath("$.timeline[0].title").value("任务已创建"))
                 .andExpect(jsonPath("$.timeline[0].level").value("info"))
-                .andExpect(jsonPath("$.debugTask.taskId").value(taskId))
+                .andExpect(jsonPath("$.debugTask").doesNotExist())
                 .andExpect(jsonPath("$.task").doesNotExist())
                 .andExpect(jsonPath("$.cards").doesNotExist());
 

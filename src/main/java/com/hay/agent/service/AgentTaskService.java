@@ -162,7 +162,7 @@ public class AgentTaskService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "任务必须处于 CREATED 状态才能生成规划");
         }
 
-        // 规划步骤由 Planner 抽象提供：当前是 Mock，后续可平滑替换为大模型规划结果。
+        // 规划步骤由 Planner 抽象提供；当前主实现为 LlmPlanner，MockPlanner 仅作本地兜底。
         List<PlanStep> steps = planner.plan(task.getInputText());
         steps.forEach(this::normalizeConfirmPolicy);
         task.setPlanSteps(steps);
@@ -199,12 +199,12 @@ public class AgentTaskService {
             step.setStatus(StepStatus.APPROVED);
             task.setStatus(TaskStatus.PLANNED);
             task.setNextAction("execute");
-            addEvent(task, "STEP_APPROVED", "Step approved by user", Map.of("stepId", step.getStepId()));
+            addEvent(task, "STEP_APPROVED", "Step approved by user", actionMetadata(step.getStepId(), request.getSource(), request.getClientId()));
         } else {
             step.setStatus(StepStatus.SKIPPED);
             task.setStatus(TaskStatus.FAILED);
             task.setNextAction("none");
-            addEvent(task, "STEP_REJECTED", "Step rejected by user", Map.of("stepId", step.getStepId()));
+            addEvent(task, "STEP_REJECTED", "Step rejected by user", actionMetadata(step.getStepId(), request.getSource(), request.getClientId()));
         }
 
         return save(task);
@@ -214,6 +214,10 @@ public class AgentTaskService {
      * 取消任务。用于飞书卡片或前端在尚未交付前终止任务。
      */
     public AgentTask cancelTask(String taskId, String reason) {
+        return cancelTask(taskId, reason, "lark_card", "");
+    }
+
+    public AgentTask cancelTask(String taskId, String reason, String source, String clientId) {
         AgentTask task = getTask(taskId);
         if (task.getStatus() == TaskStatus.DELIVERED || task.getStatus() == TaskStatus.FAILED) {
             return task;
@@ -229,7 +233,7 @@ public class AgentTaskService {
         task.setNextAction("none");
         addEvent(task, "TASK_CANCELLED",
                 reason == null || reason.isBlank() ? "任务已由用户取消" : reason,
-                Map.of("source", "lark_card"));
+                actionMetadata("", source, clientId));
         return save(task);
     }
 
@@ -248,6 +252,10 @@ public class AgentTaskService {
         try {
             Object preview = generator.generate(task, step, request);
             JsonNode previewData = objectMapper.valueToTree(preview);
+            if (previewData instanceof ObjectNode previewObject) {
+                stampCompositionMetadata(task, step, previewObject);
+                stampPreviewMetadata(step, previewObject, "generated", null);
+            }
             step.setPreviewData(previewData);
             replacePreviewArtifact(task, step, generator.previewArtifactType(), generator.previewTitle(), previewData);
 
@@ -255,7 +263,7 @@ public class AgentTaskService {
             task.setStatus(TaskStatus.WAIT_CONFIRM);
             task.setNextAction("confirm:" + step.getStepId());
             addEvent(task, "STEP_PREVIEW_READY", "步骤预览已生成",
-                    Map.of("stepId", step.getStepId(), "artifactType", generator.previewArtifactType()));
+                    previewReadyMetadata(task, step, generator.previewArtifactType()));
             return save(task);
         } catch (Exception e) {
             step.setStatus(StepStatus.FAILED);
@@ -284,6 +292,8 @@ public class AgentTaskService {
 
         ObjectNode previewData = request.getPreviewData().deepCopy();
         normalizeAndValidatePreviewData(step, generator, previewData);
+        stampCompositionMetadata(task, step, previewData);
+        stampPreviewMetadata(step, previewData, "manual_update", null);
         step.setPreviewData(previewData);
         replacePreviewArtifact(task, step, generator.previewArtifactType(), readPreviewTitle(previewData, generator.previewTitle()), previewData);
 
@@ -291,7 +301,7 @@ public class AgentTaskService {
         task.setStatus(TaskStatus.WAIT_CONFIRM);
         task.setNextAction("confirm:" + step.getStepId());
         addEvent(task, "STEP_PREVIEW_UPDATED", "用户已更新步骤预览",
-                Map.of("stepId", step.getStepId(), "artifactType", generator.previewArtifactType()));
+                previewActionMetadata(task, step, generator.previewArtifactType(), request.getSource(), request.getClientId(), null));
         return save(task);
     }
 
@@ -324,6 +334,8 @@ public class AgentTaskService {
                     return fallbackPreviewData;
                 });
         normalizeAndValidatePreviewData(step, generator, previewData);
+        stampCompositionMetadata(task, step, previewData);
+        stampPreviewMetadata(step, previewData, "natural_language_refine", request.getInstruction());
         step.setPreviewData(previewData);
         replacePreviewArtifact(task, step, generator.previewArtifactType(), readPreviewTitle(previewData, generator.previewTitle()), previewData);
 
@@ -331,7 +343,7 @@ public class AgentTaskService {
         task.setStatus(TaskStatus.WAIT_CONFIRM);
         task.setNextAction("confirm:" + step.getStepId());
         addEvent(task, "STEP_PREVIEW_REFINED", "步骤预览已按自然语言指令精修",
-                Map.of("stepId", step.getStepId(), "artifactType", generator.previewArtifactType()));
+                previewActionMetadata(task, step, generator.previewArtifactType(), request.getSource(), request.getClientId(), request.getInstruction()));
         return save(task);
     }
 
@@ -383,6 +395,98 @@ public class AgentTaskService {
     private String readPreviewTitle(JsonNode previewData, String fallback) {
         String title = previewData == null ? "" : previewData.path("title").asText("");
         return title.isBlank() ? fallback : title;
+    }
+
+    private void stampPreviewMetadata(PlanStep step, ObjectNode previewData, String lastEditType, String instruction) {
+        int previousRevision = step.getPreviewData() == null ? 0 : step.getPreviewData().path("revision").asInt(0);
+        String now = Instant.now().toString();
+        previewData.put("revision", previousRevision + 1);
+        previewData.put("lastEditType", lastEditType);
+        previewData.put("updatedAt", now);
+        if (instruction != null && !instruction.isBlank()) {
+            previewData.put("lastRefineInstruction", instruction);
+            previewData.put("lastRefinedAt", now);
+        }
+    }
+
+    private void stampCompositionMetadata(AgentTask task, PlanStep step, ObjectNode previewData) {
+        if (step == null || previewData == null || !"D_SLIDES".equals(step.getStepId())) {
+            return;
+        }
+        findLatestDocPreviewArtifact(task).ifPresent(docArtifact -> {
+            JsonNode docPreviewData = docArtifact.getPreviewData();
+            ObjectNode composition = objectMapper.createObjectNode();
+            composition.put("mode", "doc_to_ppt");
+            ObjectNode source = objectMapper.createObjectNode();
+            source.put("stepId", docArtifact.getStepId());
+            source.put("type", "doc");
+            source.put("artifactType", docArtifact.getType() == null ? "docs-preview" : docArtifact.getType());
+            source.put("title", readPreviewTitle(docPreviewData, docArtifact.getTitle() == null ? "文档预览" : docArtifact.getTitle()));
+            source.put("revision", docPreviewData == null ? 0 : docPreviewData.path("revision").asInt(0));
+            String updatedAt = docPreviewData == null ? "" : docPreviewData.path("updatedAt").asText("");
+            if (!updatedAt.isBlank()) {
+                source.put("updatedAt", updatedAt);
+            }
+            composition.set("source", source);
+            previewData.set("composition", composition);
+        });
+    }
+
+    private Optional<Artifact> findLatestDocPreviewArtifact(AgentTask task) {
+        if (task == null || task.getArtifacts() == null) {
+            return Optional.empty();
+        }
+        for (int i = task.getArtifacts().size() - 1; i >= 0; i--) {
+            Artifact artifact = task.getArtifacts().get(i);
+            if (artifact == null || artifact.getPreviewData() == null) {
+                continue;
+            }
+            if ("C_DOC".equals(artifact.getStepId()) && isPreviewArtifact(artifact)) {
+                return Optional.of(artifact);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private boolean isPreviewArtifact(Artifact artifact) {
+        return artifact.getType() != null && artifact.getType().endsWith("-preview");
+    }
+
+    private Map<String, String> previewReadyMetadata(AgentTask task, PlanStep step, String artifactType) {
+        java.util.HashMap<String, String> metadata = new java.util.HashMap<>();
+        metadata.put("stepId", step.getStepId());
+        metadata.put("artifactType", artifactType);
+        addCompositionEventMetadata(metadata, task, step);
+        return metadata;
+    }
+
+    private Map<String, String> previewActionMetadata(AgentTask task,
+                                                      PlanStep step,
+                                                      String artifactType,
+                                                      String source,
+                                                      String clientId,
+                                                      String instruction) {
+        String resolvedSource = source == null || source.isBlank() ? "workspace" : source;
+        java.util.HashMap<String, String> metadata = new java.util.HashMap<>(actionMetadata(step.getStepId(), resolvedSource, clientId));
+        metadata.put("artifactType", artifactType == null ? "" : artifactType);
+        addCompositionEventMetadata(metadata, task, step);
+        if (instruction != null && !instruction.isBlank()) {
+            metadata.put("instruction", instruction);
+        }
+        return metadata;
+    }
+
+    private void addCompositionEventMetadata(java.util.Map<String, String> metadata, AgentTask task, PlanStep step) {
+        if (step == null || !"D_SLIDES".equals(step.getStepId())) {
+            return;
+        }
+        findLatestDocPreviewArtifact(task).ifPresent(docArtifact -> {
+            JsonNode docPreviewData = docArtifact.getPreviewData();
+            metadata.put("composition", "doc_to_ppt");
+            metadata.put("sourceStepId", docArtifact.getStepId());
+            metadata.put("sourceTitle", readPreviewTitle(docPreviewData, docArtifact.getTitle() == null ? "" : docArtifact.getTitle()));
+            metadata.put("sourceRevision", String.valueOf(docPreviewData == null ? 0 : docPreviewData.path("revision").asInt(0)));
+        });
     }
 
     private void applyPreviewInstruction(ObjectNode previewData, String instruction) {
@@ -506,11 +610,25 @@ public class AgentTaskService {
         if (nextInput.length() > 0) {
             nextInput.append("\n\n");
         }
-        nextInput.append("IM 补充信息：").append(supplement.strip());
+        nextInput.append("【IM后续补充信息】\n");
+        nextInput.append("消息ID：").append(messageId == null ? "" : messageId).append("\n");
+        nextInput.append("补充内容：").append(supplement.strip());
         task.setInputText(nextInput.toString());
         addEvent(task, "IM_SUPPLEMENT_RECEIVED", "收到 IM 补充信息",
-                Map.of("messageId", messageId == null ? "" : messageId));
+                Map.of("messageId", messageId == null ? "" : messageId, "source", "im"));
         return save(task);
+    }
+
+    private Map<String, String> actionMetadata(String stepId, String source, String clientId) {
+        java.util.HashMap<String, String> metadata = new java.util.HashMap<>();
+        if (stepId != null && !stepId.isBlank()) {
+            metadata.put("stepId", stepId);
+        }
+        metadata.put("source", source == null || source.isBlank() ? "user" : source);
+        if (clientId != null && !clientId.isBlank()) {
+            metadata.put("clientId", clientId);
+        }
+        return metadata;
     }
 
     /*

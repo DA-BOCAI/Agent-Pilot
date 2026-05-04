@@ -42,12 +42,12 @@ public class LlmPlanner implements Planner {
 
     public LlmPlanner(RestClient.Builder restClientBuilder,
                       ObjectMapper objectMapper,
-                      @Value("${langchain4j.open-ai.base-url:https://ark.cn-beijing.volces.com/api/v3}") String baseUrl,
-                      @Value("${langchain4j.open-ai.api-key:}") String apiKey,
-                      @Value("${langchain4j.open-ai.model-name:}") String modelName,
-                      @Value("${langchain4j.open-ai.temperature:0.0}") double temperature,
-                      @Value("${langchain4j.open-ai.connect-timeout:10s}") Duration connectTimeout,
-                      @Value("${langchain4j.open-ai.read-timeout:180s}") Duration readTimeout) {
+                      @Value("${agent.llm.open-ai.base-url:https://ark.cn-beijing.volces.com/api/v3}") String baseUrl,
+                      @Value("${agent.llm.open-ai.api-key:}") String apiKey,
+                      @Value("${agent.llm.open-ai.model-name:}") String modelName,
+                      @Value("${agent.llm.open-ai.temperature:0.0}") double temperature,
+                      @Value("${agent.llm.open-ai.connect-timeout:10s}") Duration connectTimeout,
+                      @Value("${agent.llm.open-ai.read-timeout:180s}") Duration readTimeout) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(connectTimeout);
         requestFactory.setReadTimeout(readTimeout);
@@ -77,7 +77,7 @@ public class LlmPlanner implements Planner {
                 log.info("大模型原始返回：{}", content);
 
                 List<PlanStep> steps = parseSteps(content);
-                normalizeSteps(steps);
+                normalizeSteps(steps, inputText);
 
                 log.info("大模型计划拆解成功，包含步骤数：{}", steps.size());
                 return steps;
@@ -161,7 +161,8 @@ public class LlmPlanner implements Planner {
                            - none: 其他不需要调用工具的步骤
                         3. 每个步骤对象必须包含 stepId、scene、action、tool、requiresConfirm 5个字段
                         4. 只有 C_DOC 和 D_SLIDES 允许 requiresConfirm=true，用于进入 confirm1/confirm2 双确认链路；A_CAPTURE、B_PLAN、SEND_IM、F_DELIVER 必须为 false
-                        5. 拆解步骤要符合逻辑顺序，比如需要先生成文档内容，再生成PPT，最后通知用户
+                        5. 拆解步骤要符合逻辑顺序，比如需要先生成文档内容，再生成PPT，最后通知用户。
+                        6. 对复杂汇报、方案、宣讲、复盘、项目总结、路演、经营分析等 PPT/演示稿需求，必须先规划 C_DOC 沉淀文档内容，再规划 D_SLIDES 基于文档生成演示稿。
                         """)
                 ;
         messages.addObject()
@@ -172,11 +173,23 @@ public class LlmPlanner implements Planner {
                         - A_CAPTURE 表示理解并标准化用户意图，tool 必须为 none，requiresConfirm 必须为 false。
                         - B_PLAN 表示整理执行计划，tool 必须为 none，requiresConfirm 必须为 false。
                         - C_DOC 和 D_SLIDES 会创建飞书产物，必须进入 confirm1/confirm2 双确认链路，因此 requiresConfirm 必须为 true。
+                        - 如果用户要 PPT/演示稿，且需求中包含背景、目标、方案、复盘、宣讲、汇报、策略、项目、数据分析等需要内容沉淀的语义，必须输出 C_DOC -> D_SLIDES 的组合编排。
+                        - D_SLIDES 的 action 应明确写成“基于前序文档生成/整理演示稿”，不要写成与 C_DOC 无关的独立生成。
                         - SEND_IM 是 Agent 在产物创建后的自动通知动作，F_DELIVER 是内部交付收尾动作，二者必须 requiresConfirm=false，禁止产生第三次确认。
                         - 禁止把所有步骤都设为 requiresConfirm=true，确认闸门只用于文档/PPT等用户需要预览和最终确认的产物步骤。
 
                         用户请求：
                         """ + inputText);
+        messages.addObject()
+                .put("role", "user")
+                .put("content", """
+                        如果用户请求来自 IM，并包含【IM任务输入】这类结构化字段，请按以下规则理解：
+                        - 【用户明确需求】是最高优先级，决定要生成什么产物。
+                        - 【最近讨论上下文】只用于补充背景、约束、偏好和讨论共识，不要把每一句都当成要执行的新任务。
+                        - 【IM后续补充信息】代表用户在任务进行中的新增约束，应合并进后续预览和正式产物。
+                        - 如果上下文与明确需求冲突，以明确需求为准；如果补充信息与早期上下文冲突，以补充信息为准。
+                        - 规划 action 应面向用户真实产物，不要把“解析 IM 模板字段”本身作为单独步骤。
+                        """);
 
         return root;
     }
@@ -215,10 +228,12 @@ public class LlmPlanner implements Planner {
         return steps;
     }
 
-    private void normalizeSteps(List<PlanStep> steps) {
+    private void normalizeSteps(List<PlanStep> steps, String inputText) {
         if (steps == null || steps.isEmpty()) {
             throw new IllegalStateException("大模型没有返回任何规划步骤");
         }
+
+        ensureDocToSlidesComposition(steps, inputText);
 
         for (int i = 0; i < steps.size(); i++) {
             PlanStep step = steps.get(i);
@@ -248,6 +263,61 @@ public class LlmPlanner implements Planner {
             }
             step.setStatus(StepStatus.PENDING);
         }
+    }
+
+    private void ensureDocToSlidesComposition(List<PlanStep> steps, String inputText) {
+        int slidesIndex = indexOfStep(steps, "D_SLIDES");
+        if (slidesIndex < 0 || !shouldComposeDocBeforeSlides(inputText)) {
+            return;
+        }
+
+        int docIndex = indexOfStep(steps, "C_DOC");
+        if (docIndex < 0) {
+            steps.add(slidesIndex, PlanStep.builder()
+                    .stepId("C_DOC")
+                    .scene("C")
+                    .action("先沉淀一份可复用的方案文档，作为后续演示稿内容依据")
+                    .tool("lark-doc")
+                    .requiresConfirm(true)
+                    .status(StepStatus.PENDING)
+                    .build());
+            slidesIndex++;
+        } else if (docIndex > slidesIndex) {
+            PlanStep docStep = steps.remove(docIndex);
+            steps.add(slidesIndex, docStep);
+            slidesIndex++;
+        }
+
+        PlanStep slidesStep = steps.get(Math.min(slidesIndex, steps.size() - 1));
+        String action = slidesStep.getAction() == null ? "" : slidesStep.getAction();
+        if (!action.contains("基于") && !action.contains("前序文档") && !action.contains("文档")) {
+            slidesStep.setAction("基于前序方案文档生成演示文稿");
+        }
+    }
+
+    private int indexOfStep(List<PlanStep> steps, String stepId) {
+        for (int i = 0; i < steps.size(); i++) {
+            if (stepId.equals(steps.get(i).getStepId())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private boolean shouldComposeDocBeforeSlides(String inputText) {
+        String text = inputText == null ? "" : inputText.toLowerCase();
+        boolean asksSlides = containsAny(text, "ppt", "演示稿", "幻灯片", "deck", "slides", "汇报", "宣讲", "路演");
+        boolean needsSynthesis = containsAny(text, "方案", "策略", "项目", "复盘", "总结", "分析", "背景", "目标", "规划", "经营", "校招", "发布会", "需求", "计划");
+        return asksSlides && needsSynthesis;
+    }
+
+    private boolean containsAny(String text, String... keywords) {
+        for (String keyword : keywords) {
+            if (text.contains(keyword.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String extractJson(String content) {
