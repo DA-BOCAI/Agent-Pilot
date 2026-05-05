@@ -53,7 +53,7 @@ function App() {
       }))
     : (task?.planSteps ?? [])
 
-  const doneCount = displaySteps.filter((s) => s.status === 'DONE' || s.status === 'APPROVED').length
+  const doneCount = displaySteps.filter((s) => s.status === 'DONE' || s.status === 'APPROVED' || s.status === 'WAIT_CONFIRM').length
   const progress = displaySteps.length ? Math.round((doneCount / displaySteps.length) * 100) : 0
 
   return (
