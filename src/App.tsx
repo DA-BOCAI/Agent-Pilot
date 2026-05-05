@@ -115,6 +115,8 @@ function App() {
             artifacts={previewArtifacts}
             workspacePreview={workspace?.preview}
             isDelivered={task?.status === 'DELIVERED' || workspace?.status === 'DELIVERED'}
+            onDeterministicUpdate={handleDeterministicUpdate}
+            disabled={isLoading}
           />
         </main>
       </div>
