@@ -143,7 +143,7 @@ public class AgentTaskService {
                   // 任务失败时必须回写状态并持久化，避免 Redis 长期停留在 CREATED。
                   savedTask.setStatus(TaskStatus.FAILED);
                   savedTask.setNextAction("none");
-                  addEvent(savedTask, "TASK_FAILED", "任务执行失败: " + e.getMessage(), Map.of("cause", e.getClass().getSimpleName()));
+                  addEvent(savedTask, "TASK_FAILED", failureMessage("任务执行失败", e), failureMetadata(e, null));
                   save(savedTask);
                   log.error("任务{}自动执行失败，已回写失败状态",savedTask.getTaskId(),e);
               }
@@ -162,15 +162,23 @@ public class AgentTaskService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "任务必须处于 CREATED 状态才能生成规划");
         }
 
-        // 规划步骤由 Planner 抽象提供；当前主实现为 LlmPlanner，MockPlanner 仅作本地兜底。
-        List<PlanStep> steps = planner.plan(task.getInputText());
-        steps.forEach(this::normalizeConfirmPolicy);
-        task.setPlanSteps(steps);
-        task.setStatus(TaskStatus.PLANNED);
-        task.setNextAction("execute");
-        addEvent(task, "TASK_PLANNED", "Planner generated step list", Map.of("steps", String.valueOf(steps.size())));
+        try {
+            // 规划步骤由 Planner 抽象提供；当前主实现为 LlmPlanner，MockPlanner 仅作本地兜底。
+            List<PlanStep> steps = planner.plan(task.getInputText());
+            steps.forEach(this::normalizeConfirmPolicy);
+            task.setPlanSteps(steps);
+            task.setStatus(TaskStatus.PLANNED);
+            task.setNextAction("execute");
+            addEvent(task, "TASK_PLANNED", "Planner generated step list", Map.of("steps", String.valueOf(steps.size())));
 
-        return save(task);
+            return save(task);
+        } catch (Exception e) {
+            task.setStatus(TaskStatus.FAILED);
+            task.setNextAction("none");
+            addEvent(task, "TASK_FAILED", failureMessage("任务规划失败", e), failureMetadata(e, null));
+            save(task);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "任务规划失败：" + e.getMessage(), e);
+        }
     }
 
     /**
@@ -269,7 +277,7 @@ public class AgentTaskService {
             step.setStatus(StepStatus.FAILED);
             task.setStatus(TaskStatus.FAILED);
             task.setNextAction("none");
-            addEvent(task, "STEP_PREVIEW_FAILED", "步骤预览生成失败：" + e.getMessage(), Map.of("stepId", step.getStepId()));
+            addEvent(task, "STEP_PREVIEW_FAILED", failureMessage("步骤预览生成失败", e), failureMetadata(e, step.getStepId()));
             save(task);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "生成预览失败：" + e.getMessage(), e);
         }
@@ -551,10 +559,19 @@ public class AgentTaskService {
 
             step.setStatus(StepStatus.RUNNING);
             addEvent(task, "STEP_RUNNING", "Executing step", Map.of("stepId", step.getStepId(), "tool", step.getTool()));
-            // 控制类步骤可能不产出实体结果，因此工具执行返回值允许为空。
-            toolExecutor.execute(step, task.getTaskId(), task.getInputText()).ifPresent(task.getArtifacts()::add);
-            step.setStatus(StepStatus.DONE);
-            addEvent(task, "STEP_DONE", "Step completed", Map.of("stepId", step.getStepId()));
+            try {
+                // 控制类步骤可能不产出实体结果，因此工具执行返回值允许为空。
+                toolExecutor.execute(step, task.getTaskId(), task.getInputText()).ifPresent(task.getArtifacts()::add);
+                step.setStatus(StepStatus.DONE);
+                addEvent(task, "STEP_DONE", "Step completed", Map.of("stepId", step.getStepId()));
+            } catch (Exception e) {
+                step.setStatus(StepStatus.FAILED);
+                task.setStatus(TaskStatus.FAILED);
+                task.setNextAction("none");
+                addEvent(task, "TASK_FAILED", failureMessage("任务执行失败", e), failureMetadata(e, step.getStepId()));
+                save(task);
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "任务执行失败：" + e.getMessage(), e);
+            }
         }
 
         //当前任务执行完成，生成了结果，状态设置为交付状态，任务执行完成
@@ -627,6 +644,24 @@ public class AgentTaskService {
         metadata.put("source", source == null || source.isBlank() ? "user" : source);
         if (clientId != null && !clientId.isBlank()) {
             metadata.put("clientId", clientId);
+        }
+        return metadata;
+    }
+
+    private String failureMessage(String prefix, Exception e) {
+        ModelFailureClassifier.FailureInfo failure = ModelFailureClassifier.classify(e);
+        return prefix + "：" + failure.userMessage();
+    }
+
+    private Map<String, String> failureMetadata(Exception e, String stepId) {
+        ModelFailureClassifier.FailureInfo failure = ModelFailureClassifier.classify(e);
+        java.util.HashMap<String, String> metadata = new java.util.HashMap<>();
+        metadata.put("cause", e.getClass().getSimpleName());
+        metadata.put("failureKind", failure.kind());
+        metadata.put("userMessage", failure.userMessage());
+        metadata.put("retryAdvice", failure.retryAdvice());
+        if (stepId != null && !stepId.isBlank()) {
+            metadata.put("stepId", stepId);
         }
         return metadata;
     }

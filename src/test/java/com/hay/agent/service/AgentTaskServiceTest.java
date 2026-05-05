@@ -26,6 +26,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -133,6 +134,36 @@ class AgentTaskServiceTest {
         assertEquals(1, task.getArtifacts().size());
         assertEquals("slides-preview", task.getArtifacts().get(0).getType());
         assertEquals("campaign", task.getArtifacts().get(0).getPreviewData().path("theme").asText());
+    }
+
+    @Test
+    void shouldPersistModelRateLimitFailureWhenPreviewGenerationFails() {
+        when(planner.plan(anyString())).thenReturn(List.of(
+                PlanStep.builder().stepId("D_SLIDES").scene("D").action("生成演示文稿").tool("lark-slides").requiresConfirm(true).status(StepStatus.PENDING).build()
+        ));
+        when(contentPreviewService.previewPresentation(any()))
+                .thenThrow(new IllegalStateException("TPM limit exceeded: tokens per minute rate limit"));
+
+        CreateTaskRequest create = new CreateTaskRequest();
+        create.setInputText("生成项目复盘PPT");
+        create.setUserId("u-test-rate-limit");
+        create.setRequestId("req-test-rate-limit");
+
+        AgentTask task = agentTaskService.createTask(create);
+        task = agentTaskService.planTask(task.getTaskId());
+
+        String taskId = task.getTaskId();
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> agentTaskService.generateStepPreview(taskId, "D_SLIDES", new GenerateStepPreviewRequest()));
+
+        AgentTask failedTask = agentTaskService.getTask(taskId);
+        assertEquals(TaskStatus.FAILED, failedTask.getStatus());
+        assertEquals(StepStatus.FAILED, failedTask.getPlanSteps().get(0).getStatus());
+        var failureEvent = failedTask.getEvents().get(failedTask.getEvents().size() - 1);
+        assertEquals("STEP_PREVIEW_FAILED", failureEvent.getType());
+        assertEquals("LLM_RATE_LIMIT", failureEvent.getMetadata().get("failureKind"));
+        assertTrue(failureEvent.getMetadata().get("userMessage").contains("大模型请求受限"));
+        assertTrue(failureEvent.getMessage().contains("TPM"));
     }
 
     @Test

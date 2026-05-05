@@ -79,19 +79,18 @@ public class TaskController {
 
     @Deprecated
     @PostMapping("/{taskId}/confirm")
-    @Operation(summary = "确认步骤（Legacy）", description = "兼容旧调试入口；工作台前端请使用 /workspace/confirm")
+    @Operation(summary = "确认步骤（Legacy）", description = "兼容旧调试入口；会转交统一工作台编排链路继续推进")
     public ResponseEntity<TaskView> confirmTask(@PathVariable String taskId,
                                                 @Valid @RequestBody ConfirmTaskRequest request) {
-        return ResponseEntity.ok(taskMapper.toView(agentTaskService.confirmStep(taskId, request)));
+        return ResponseEntity.ok(taskMapper.toView(confirmViaCoordinator(taskId, request)));
     }
 
     @Deprecated
     @PostMapping("/{taskId}/confirm-and-run")
-    @Operation(summary = "确认并继续推进（Legacy）", description = "兼容旧调试入口；工作台前端请使用 /workspace/confirm")
+    @Operation(summary = "确认并继续推进（Legacy）", description = "兼容旧调试入口；会转交统一工作台编排链路继续推进")
     public ResponseEntity<TaskView> confirmAndRunTask(@PathVariable String taskId,
                                                       @Valid @RequestBody ConfirmTaskRequest request) {
-        agentTaskService.confirmStep(taskId, request);
-        return ResponseEntity.ok(taskMapper.toView(agentRunner.runUntilBlocked(taskId)));
+        return ResponseEntity.ok(taskMapper.toView(confirmViaCoordinator(taskId, request)));
     }
 
     @PostMapping("/{taskId}/workspace/confirm")
@@ -178,5 +177,20 @@ public class TaskController {
     @Operation(summary = "查询任务事件", description = "返回任务执行过程中的完整事件时间线")
     public ResponseEntity<List<TaskEvent>> getEvents(@PathVariable String taskId) {
         return ResponseEntity.ok(agentTaskService.listEvents(taskId));
+    }
+
+    private com.hay.agent.domain.AgentTask confirmViaCoordinator(String taskId, ConfirmTaskRequest request) {
+        if (Boolean.FALSE.equals(request.getApproved())) {
+            CancelTaskRequest cancelRequest = new CancelTaskRequest();
+            cancelRequest.setStepId(request.getStepId());
+            cancelRequest.setComment(request.getComment());
+            cancelRequest.setSource(request.getSource() == null || request.getSource().isBlank() ? "workspace_legacy_confirm" : request.getSource());
+            cancelRequest.setClientId(request.getClientId());
+            return taskActionCoordinator.cancelFromWorkspace(taskId, cancelRequest);
+        }
+        if (request.getSource() == null || request.getSource().isBlank()) {
+            request.setSource("workspace_legacy_confirm");
+        }
+        return taskActionCoordinator.confirmFromWorkspace(taskId, request);
     }
 }

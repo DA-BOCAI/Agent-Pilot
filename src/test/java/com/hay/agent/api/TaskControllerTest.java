@@ -2,9 +2,17 @@ package com.hay.agent.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hay.agent.api.dto.ConfirmTaskRequest;
+import com.hay.agent.domain.AgentTask;
 import com.hay.agent.domain.PlanStep;
 import com.hay.agent.domain.StepStatus;
+import com.hay.agent.domain.TaskStatus;
+import com.hay.agent.mapper.TaskMapper;
 import com.hay.agent.planner.Planner;
+import com.hay.agent.runner.AgentRunner;
+import com.hay.agent.service.AgentTaskService;
+import com.hay.agent.service.TaskWorkspaceStreamService;
+import com.hay.agent.service.workflow.TaskActionCoordinator;
 import org.mockito.Mockito;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +24,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
@@ -123,6 +132,41 @@ class TaskControllerTest {
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.displayStatus").value("已取消"))
                 .andExpect(jsonPath("$.timeline[?(@.type == 'TASK_CANCELLED')]").exists());
+    }
+
+    @Test
+    void legacyConfirmShouldUseUnifiedWorkspaceCoordinator() {
+        AgentTaskService agentTaskService = Mockito.mock(AgentTaskService.class);
+        AgentRunner agentRunner = Mockito.mock(AgentRunner.class);
+        TaskActionCoordinator coordinator = Mockito.mock(TaskActionCoordinator.class);
+        TaskController controller = new TaskController(
+                agentTaskService,
+                agentRunner,
+                coordinator,
+                new TaskMapper(),
+                Mockito.mock(TaskWorkspaceStreamService.class));
+        AgentTask advancedTask = AgentTask.builder()
+                .taskId("task-legacy-confirm")
+                .requestId("req-legacy-confirm")
+                .userId("u-01")
+                .source("IM:p2p:oc_1")
+                .inputText("生成项目复盘PPT")
+                .status(TaskStatus.DELIVERED)
+                .nextAction("none")
+                .build();
+        Mockito.when(coordinator.confirmFromWorkspace(Mockito.eq("task-legacy-confirm"), Mockito.any()))
+                .thenReturn(advancedTask);
+
+        ConfirmTaskRequest request = new ConfirmTaskRequest();
+        request.setStepId("D_SLIDES");
+        request.setApproved(true);
+        var response = controller.confirmTask("task-legacy-confirm", request);
+
+        assertEquals("DELIVERED", response.getBody().getStatus().name());
+        Mockito.verify(coordinator).confirmFromWorkspace(Mockito.eq("task-legacy-confirm"), Mockito.same(request));
+        Mockito.verify(agentTaskService, Mockito.never()).confirmStep(Mockito.anyString(), Mockito.any());
+        Mockito.verify(agentRunner, Mockito.never()).runUntilBlocked(Mockito.anyString());
+        assertEquals("workspace_legacy_confirm", request.getSource());
     }
 
 }

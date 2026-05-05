@@ -10,6 +10,7 @@ import com.hay.agent.domain.PlanStep;
 import com.hay.agent.domain.StepStatus;
 import com.hay.agent.domain.TaskEvent;
 import com.hay.agent.domain.TaskStatus;
+import com.hay.agent.service.ModelFailureClassifier;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -515,7 +516,9 @@ public class TaskMapper {
                 .finished(finished)
                 .failed(failed)
                 .links(links)
-                .message(failed ? "任务执行失败，请查看事件列表" : finished ? "任务已完成" : "任务进行中")
+                .message(failed
+                        ? ModelFailureClassifier.latestUserMessage(task).orElse("任务执行失败，请查看事件列表")
+                        : finished ? "任务已完成" : "任务进行中")
                 .build();
     }
 

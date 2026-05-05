@@ -6,6 +6,7 @@ import com.hay.agent.domain.Artifact;
 import com.hay.agent.domain.PlanStep;
 import com.hay.agent.service.content.ContentGeneratorService;
 import com.hay.agent.service.presentation.LarkSlideXmlRenderer;
+import com.hay.agent.service.presentation.PresentationDesignAdvisor;
 import com.hay.agent.service.presentation.PresentationMarkdownParser;
 import com.hay.agent.service.presentation.PresentationSlide;
 import com.hay.agent.service.presentation.PresentationTheme;
@@ -40,6 +41,7 @@ public class LarkToolExecutor implements ToolExecutor {
     private final ObjectMapper objectMapper;
     private final ContentGeneratorService contentGeneratorService;
     private final PresentationMarkdownParser presentationMarkdownParser;
+    private final PresentationDesignAdvisor presentationDesignAdvisor;
     private final LarkSlideXmlRenderer larkSlideXmlRenderer;
     private static final String LARK_CLI_PATH = "C:\\Users\\Swiftie\\AppData\\Roaming\\npm\\node_modules\\@larksuite\\cli\\scripts\\run.js";
     private final Duration larkCliTimeout;
@@ -48,12 +50,14 @@ public class LarkToolExecutor implements ToolExecutor {
     public LarkToolExecutor(ObjectMapper objectMapper,
                             ContentGeneratorService contentGeneratorService,
                             PresentationMarkdownParser presentationMarkdownParser,
+                            PresentationDesignAdvisor presentationDesignAdvisor,
                             LarkSlideXmlRenderer larkSlideXmlRenderer,
                             @Value("${agent.tool.lark-cli-timeout:180s}") Duration larkCliTimeout,
                             @Value("${agent.im.workspace-url:https://agent-pilot-nine.vercel.app}") String workspaceUrl) {
         this.objectMapper = objectMapper;
         this.contentGeneratorService = contentGeneratorService;
         this.presentationMarkdownParser = presentationMarkdownParser;
+        this.presentationDesignAdvisor = presentationDesignAdvisor;
         this.larkSlideXmlRenderer = larkSlideXmlRenderer;
         this.larkCliTimeout = larkCliTimeout;
         this.workspaceUrl = normalizeWorkspaceUrl(workspaceUrl);
@@ -136,6 +140,7 @@ public class LarkToolExecutor implements ToolExecutor {
             List<PresentationSlide> slides = usePreviewSlides
                     ? readPreviewSlides(previewData)
                     : presentationMarkdownParser.parse(pptContent, title);
+            slides = presentationDesignAdvisor.polish(slides);
 
             JsonNode createJson = executeCliJson(List.of(
                     LARK_CLI_PATH,

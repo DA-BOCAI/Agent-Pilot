@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hay.agent.domain.Artifact;
 import com.hay.agent.service.content.ContentGeneratorService;
 import com.hay.agent.service.presentation.LarkSlideXmlRenderer;
+import com.hay.agent.service.presentation.PresentationDesignAdvisor;
 import com.hay.agent.service.presentation.PresentationMarkdownParser;
 import com.hay.agent.service.presentation.PresentationSlide;
 import com.hay.agent.service.presentation.PresentationTheme;
@@ -24,6 +25,7 @@ class LarkToolExecutorTest {
             new ObjectMapper(),
             mock(ContentGeneratorService.class),
             new PresentationMarkdownParser(),
+            new PresentationDesignAdvisor(),
             new LarkSlideXmlRenderer(),
             Duration.ofSeconds(1),
             "https://workspace.example.com"
