@@ -122,14 +122,13 @@ export type ConfirmTaskRequest = {
 }
 
 export type Step = {
-  id: string
-  title: string
-  description?: string
+  stepId: string
+  name: string
+  action?: string
   status: StepStatus
   displayStatus?: string
   requiresConfirm: boolean
-  artifactType?: string
-  order: number
+  active?: boolean
 }
 
 export type Confirmation = {
@@ -200,6 +199,18 @@ export type TimelineEvent = {
   metadata?: Record<string, unknown>
 }
 
+export type Sync = {
+  status?: 'syncing' | 'synced' | 'error'
+  lastSyncTime?: string
+  error?: string
+}
+
+export type BackendSync = {
+  status?: string
+  lastSyncTime?: string
+  error?: string
+}
+
 export type Workspace = {
   taskId: string
   title?: string
@@ -207,6 +218,7 @@ export type Workspace = {
   displayStatus?: string
   nextAction?: string
   source?: string
+  sourceDisplay?: string
   userId?: string
   createdAt?: string
   updatedAt?: string
@@ -218,19 +230,18 @@ export type Workspace = {
   adjustments: Adjustments
   outputs: Output[]
   timeline: TimelineEvent[]
+  sync?: Sync
   debugTask?: unknown
 }
 
 export type BackendStep = {
-  id?: string
   stepId?: string
-  title?: string
-  description?: string
+  name?: string
+  action?: string
   status?: string
   displayStatus?: string
   requiresConfirm?: boolean
-  artifactType?: string
-  order?: number
+  active?: boolean
 }
 
 export type BackendConfirmation = {
@@ -304,6 +315,7 @@ export type BackendWorkspace = {
   displayStatus?: string
   nextAction?: string
   source?: string
+  sourceDisplay?: string
   userId?: string
   createdAt?: string
   updatedAt?: string
@@ -315,6 +327,7 @@ export type BackendWorkspace = {
   adjustments?: BackendAdjustments
   outputs?: BackendOutput[]
   timeline?: BackendTimelineEvent[]
+  sync?: BackendSync
   debugTask?: unknown
 }
 

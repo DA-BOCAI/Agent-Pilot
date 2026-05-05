@@ -8,6 +8,8 @@ import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import { visit } from 'unist-util-visit'
 import type { Root } from 'mdast'
+import { MarkdownEditor } from './MarkdownEditor'
+import { StructuredEditor } from './StructuredEditor'
 import type { DocumentBlock, DocumentPreviewData, DocumentSection } from '../types/preview'
 
 type OutlineItem = {
@@ -20,6 +22,9 @@ type DocumentPreviewProps = {
   data: DocumentPreviewData
   fallbackTitle: string
   onOutlineChange?: (outline: OutlineItem[]) => void
+  isEditing?: boolean
+  onDataChange?: (data: DocumentPreviewData) => void
+  disabled?: boolean
 }
 
 function extractOutlineFromAst(md: string): OutlineItem[] {
@@ -44,7 +49,14 @@ function headingText(node: { children: Array<{ type: string; value?: string; chi
     .join('')
 }
 
-export function DocumentPreview({ data, fallbackTitle, onOutlineChange }: DocumentPreviewProps) {
+export function DocumentPreview({ 
+  data, 
+  fallbackTitle, 
+  onOutlineChange,
+  isEditing = false,
+  onDataChange,
+  disabled = false
+}: DocumentPreviewProps) {
   const sections = data.sections ?? data.blocks ?? []
 
   const computedOutline = useMemo<OutlineItem[]>(() => {
@@ -67,6 +79,30 @@ export function DocumentPreview({ data, fallbackTitle, onOutlineChange }: Docume
       onOutlineChange(computedOutline)
     }
   }, [computedOutline, onOutlineChange])
+
+  if (isEditing) {
+    if (data.rawMarkdown) {
+      return (
+        <MarkdownEditor
+          value={data.rawMarkdown}
+          onChange={(newMarkdown) => {
+            onDataChange?.({ ...data, rawMarkdown: newMarkdown })
+          }}
+          disabled={disabled}
+        />
+      )
+    }
+
+    if (data.sections || data.blocks) {
+      return (
+        <StructuredEditor
+          data={data}
+          onChange={onDataChange}
+          disabled={disabled}
+        />
+      )
+    }
+  }
 
   return (
     <div className="doc-preview artifact-doc">

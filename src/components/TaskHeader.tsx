@@ -6,7 +6,6 @@ type TaskHeaderProps = {
   workspace?: Workspace | null
   isLoading: boolean
   onRefresh: () => void
-  onReset: () => void
 }
 
 const statusColor: Record<string, string> = {
@@ -18,7 +17,7 @@ const statusColor: Record<string, string> = {
   FAILED: 'var(--danger)',
 }
 
-export function TaskHeader({ task, workspace, isLoading, onRefresh, onReset }: TaskHeaderProps) {
+export function TaskHeader({ task, workspace, isLoading, onRefresh }: TaskHeaderProps) {
   const status = workspace?.status ?? task?.status ?? 'IDLE'
   const statusText = workspace?.displayStatus ?? (task ? statusLabels[task.status] : '等待任务')
   const title = workspace?.title ?? workspace?.inputSummary ?? task?.inputText ?? 'Agent Pilot 任务中心'
@@ -42,16 +41,10 @@ export function TaskHeader({ task, workspace, isLoading, onRefresh, onReset }: T
 
       <div className="task-header-actions">
         {(task || workspace) ? (
-          <>
-            <button className="btn btn-secondary" disabled={isLoading} onClick={onRefresh}>
-              <span className="btn-icon">↻</span>
-              刷新
-            </button>
-            <button className="btn btn-ghost" disabled={isLoading} onClick={onReset}>
-              <span className="btn-icon">✕</span>
-              重置
-            </button>
-          </>
+          <button className="btn btn-secondary" disabled={isLoading} onClick={onRefresh}>
+            <span className="btn-icon">↻</span>
+            刷新
+          </button>
         ) : null}
       </div>
     </div>

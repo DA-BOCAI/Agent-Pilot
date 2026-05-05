@@ -212,14 +212,6 @@ export function useTaskWorkflow() {
     })
   }
 
-  function handleReset() {
-    closeSSEConnection()
-    setTask(null)
-    setWorkspace(null)
-    setError('')
-    reconnectAttemptsRef.current = 0
-  }
-
   async function handleWorkspaceConfirm() {
     const stepId = workspace?.confirmation?.stepId
     if (!workspace || !stepId) {
@@ -262,7 +254,6 @@ export function useTaskWorkflow() {
     handleNaturalLanguageRefine,
     handlePlanTask,
     handleRefresh,
-    handleReset,
     handleWorkspaceConfirm,
     handleWorkspaceCancel,
     isLoading,

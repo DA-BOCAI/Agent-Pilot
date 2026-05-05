@@ -25,14 +25,14 @@ export function StepNavigator({ steps, workspaceSteps, activeStepCode, onStepCli
 
   const displaySteps = workspaceSteps && workspaceSteps.length > 0
     ? workspaceSteps.map((step, index) => ({
-        stepId: step.id,
+        stepId: step.stepId,
         code: `STEP_${index + 1}`,
-        name: step.title,
+        name: step.name,
         status: step.status,
         requiresConfirm: step.requiresConfirm,
         displayStatus: step.displayStatus,
-        description: step.description,
-        artifactType: step.artifactType,
+        description: step.action,
+        artifactType: undefined,
       }))
     : steps
 

@@ -5,7 +5,6 @@ type ActionPanelProps = {
   onConfirm: (approved: boolean) => void
   onPlan: () => void
   onRefresh: () => void
-  onReset: () => void
   onWorkspaceConfirm: () => void
   onWorkspaceCancel: () => void
   task: TaskView | null
@@ -36,7 +35,6 @@ export function ActionPanel({
   onConfirm,
   onPlan,
   onRefresh,
-  onReset,
   onWorkspaceConfirm,
   onWorkspaceCancel,
   task,
@@ -98,9 +96,6 @@ export function ActionPanel({
   if (status === 'FAILED') {
     return (
       <div className="action-stack">
-        <button className="btn btn-primary" disabled={disabled} onClick={onReset}>
-          重新创建
-        </button>
         <button className="btn btn-secondary" disabled={disabled} onClick={onRefresh}>
           刷新任务
         </button>

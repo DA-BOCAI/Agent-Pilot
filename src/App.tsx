@@ -18,7 +18,6 @@ function App() {
     handleNaturalLanguageRefine,
     handlePlanTask,
     handleRefresh,
-    handleReset,
     handleWorkspaceConfirm,
     handleWorkspaceCancel,
     isLoading,
@@ -30,7 +29,7 @@ function App() {
   const activeStepCode = useMemo(() => {
     if (workspace?.steps?.length) {
       const runningStep = workspace.steps.find((step) => step.status === 'RUNNING' || step.status === 'WAIT_CONFIRM')
-      return runningStep?.id ?? null
+      return runningStep?.stepId ?? null
     }
     if (!task) return null
     if (confirmStepId) return confirmStepId
@@ -42,14 +41,14 @@ function App() {
 
   const displaySteps = workspace?.steps && workspace.steps.length > 0
     ? workspace.steps.map((step, index) => ({
-        stepId: step.id,
+        stepId: step.stepId,
         code: `STEP_${index + 1}`,
-        name: step.title,
+        name: step.name,
         status: step.status,
         requiresConfirm: step.requiresConfirm,
         displayStatus: step.displayStatus,
-        description: step.description,
-        artifactType: step.artifactType,
+        description: step.action,
+        artifactType: undefined,
       }))
     : (task?.planSteps ?? [])
 
@@ -66,7 +65,6 @@ function App() {
             workspace={workspace}
             isLoading={isLoading}
             onRefresh={handleRefresh}
-            onReset={handleReset}
           />
           {/* 全局进度条 */}
           {displaySteps.length > 0 && (
@@ -141,7 +139,6 @@ function App() {
               onConfirm={handleConfirm}
               onPlan={handlePlanTask}
               onRefresh={handleRefresh}
-              onReset={handleReset}
               onWorkspaceConfirm={handleWorkspaceConfirm}
               onWorkspaceCancel={handleWorkspaceCancel}
               task={task}

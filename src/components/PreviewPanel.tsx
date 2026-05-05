@@ -29,7 +29,7 @@ export function PreviewPanel({
   const initialActiveSetRef = useRef(false)
   const isScrollingRef = useRef(false)
   const [isEditing, setIsEditing] = useState(false)
-  const [editedData, setEditedData] = useState<string>('')
+  const [editedData, setEditedData] = useState<unknown>(null)
   const [editError, setEditError] = useState<string>('')
 
   const previewArtifacts = useMemo(() => {
@@ -79,8 +79,8 @@ export function PreviewPanel({
   const handleStartEdit = useCallback(() => {
     if (!workspacePreview?.data) return
     try {
-      const jsonString = JSON.stringify(workspacePreview.data, null, 2)
-      setEditedData(jsonString)
+      const dataCopy = JSON.parse(JSON.stringify(workspacePreview.data))
+      setEditedData(dataCopy)
       setIsEditing(true)
       setEditError('')
     } catch {
@@ -88,23 +88,21 @@ export function PreviewPanel({
     }
   }, [workspacePreview])
 
+  const handleDataChange = useCallback((newData: unknown) => {
+    setEditedData(newData)
+  }, [])
+
   const handleConfirmEdit = useCallback(() => {
-    if (!onDeterministicUpdate) return
-    
-    try {
-      const parsedData = JSON.parse(editedData)
-      setEditError('')
-      onDeterministicUpdate(parsedData)
-      setIsEditing(false)
-      setEditedData('')
-    } catch {
-      setEditError('JSON 格式错误，请检查输入')
-    }
+    if (!onDeterministicUpdate || !editedData) return
+    onDeterministicUpdate(editedData)
+    setIsEditing(false)
+    setEditedData(null)
+    setEditError('')
   }, [editedData, onDeterministicUpdate])
 
   const handleCancelEdit = useCallback(() => {
     setIsEditing(false)
-    setEditedData('')
+    setEditedData(null)
     setEditError('')
   }, [])
 
@@ -209,14 +207,17 @@ export function PreviewPanel({
             {editError && (
               <div className="preview-editor-error">{editError}</div>
             )}
-            <textarea
-              className="preview-editor-textarea"
-              value={editedData}
-              onChange={(e) => setEditedData(e.target.value)}
-              disabled={disabled}
-              placeholder="编辑 JSON 数据..."
-              spellCheck={false}
-            />
+            <div className="preview-editor-content">
+              {activeArtifact && (
+                <ArtifactPreview
+                  artifact={activeArtifact}
+                  onOutlineChange={handleOutlineChange}
+                  isEditing={true}
+                  onDataChange={handleDataChange}
+                  disabled={disabled}
+                />
+              )}
+            </div>
             <div className="preview-editor-actions">
               <button
                 className="btn btn-primary preview-confirm-btn"

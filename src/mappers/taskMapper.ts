@@ -13,6 +13,7 @@ import type {
   BackendAdjustments,
   BackendOutput,
   BackendTimelineEvent,
+  BackendSync,
   EventType,
   PlanStep,
   Step,
@@ -23,6 +24,7 @@ import type {
   Output,
   TimelineEvent,
   TaskEvent,
+  Sync,
   TaskStatus,
   TaskView,
   Workspace,
@@ -58,7 +60,7 @@ export function mapTaskEvents(events: BackendTaskEvent[]): TaskEvent[] {
 function mapPlanStep(step: BackendPlanStep, index: number): PlanStep {
   // OpenAPI 里步骤主键是 stepId；旧 UI 依赖 code，所以前端同时保留两者。
   const code = step.stepId ?? step.code ?? `STEP_${index + 1}`
-  const name = step.name ?? step.action ?? step.scene ?? getStepLabel(code)
+  const name = step.name || step.action || step.scene || getStepLabel(code)
 
   return {
     code,
@@ -139,11 +141,11 @@ export function workspaceToTaskView(workspace: Workspace): TaskView {
 
 function stepToPlanStep(step: Step): PlanStep {
   return {
-    code: step.id,
-    name: step.title,
+    code: step.stepId,
+    name: step.name || `步骤`,
     status: step.status,
     requiresConfirm: step.requiresConfirm,
-    stepId: step.id,
+    stepId: step.stepId,
   }
 }
 
@@ -167,6 +169,15 @@ function timelineToTaskEvent(event: TimelineEvent): TaskEvent {
   }
 }
 
+function mapSync(dto?: BackendSync): Sync | undefined {
+  if (!dto) return undefined
+  return {
+    status: dto.status as 'syncing' | 'synced' | 'error' | undefined,
+    lastSyncTime: dto.lastSyncTime,
+    error: dto.error,
+  }
+}
+
 export function mapWorkspace(dto: BackendWorkspace): Workspace {
   return {
     taskId: dto.taskId ?? '',
@@ -175,6 +186,7 @@ export function mapWorkspace(dto: BackendWorkspace): Workspace {
     displayStatus: dto.displayStatus,
     nextAction: dto.nextAction,
     source: dto.source,
+    sourceDisplay: dto.sourceDisplay,
     userId: dto.userId,
     createdAt: dto.createdAt,
     updatedAt: dto.updatedAt,
@@ -186,20 +198,20 @@ export function mapWorkspace(dto: BackendWorkspace): Workspace {
     adjustments: mapAdjustments(dto.adjustments),
     outputs: (dto.outputs ?? []).map(mapOutput),
     timeline: (dto.timeline ?? []).map(mapTimeline),
+    sync: mapSync(dto.sync),
     debugTask: dto.debugTask,
   }
 }
 
 function mapStep(step: BackendStep, index: number): Step {
   return {
-    id: step.id ?? step.stepId ?? `STEP_${index + 1}`,
-    title: step.title ?? `步骤 ${index + 1}`,
-    description: step.description,
+    stepId: step.stepId || `STEP_${index + 1}`,
+    name: step.name || `步骤 ${index + 1}`,
+    action: step.action,
     status: normalizeStepStatus(step.status),
     displayStatus: step.displayStatus,
     requiresConfirm: step.requiresConfirm ?? false,
-    artifactType: step.artifactType,
-    order: step.order ?? index + 1,
+    active: step.active ?? false,
   }
 }
 
