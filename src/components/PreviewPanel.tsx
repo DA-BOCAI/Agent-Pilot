@@ -83,7 +83,7 @@ export function PreviewPanel({
       setEditedData(jsonString)
       setIsEditing(true)
       setEditError('')
-    } catch (error) {
+    } catch {
       setEditError('无法编辑：数据格式错误')
     }
   }, [workspacePreview])
@@ -97,7 +97,7 @@ export function PreviewPanel({
       onDeterministicUpdate(parsedData)
       setIsEditing(false)
       setEditedData('')
-    } catch (error) {
+    } catch {
       setEditError('JSON 格式错误，请检查输入')
     }
   }, [editedData, onDeterministicUpdate])
@@ -150,6 +150,7 @@ export function PreviewPanel({
   }, [outlineItems])
 
   const isDocWithOutline = activeArtifact?.type === 'doc' && outlineItems.length > 0
+  const isSlidesType = activeArtifact?.type === 'slides'
 
   if (!previewArtifacts.length) {
     return (
@@ -253,6 +254,10 @@ export function PreviewPanel({
                 collapsed={outlineCollapsed}
                 onToggleCollapse={() => setOutlineCollapsed(c => !c)}
               />
+            </div>
+          ) : isSlidesType ? (
+            <div className="slides-preview-wrapper">
+              <ArtifactPreview artifact={activeArtifact} />
             </div>
           ) : (
             <div className="preview-content-wrapper" ref={contentRef}>
