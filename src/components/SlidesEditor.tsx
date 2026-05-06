@@ -1,15 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { SlidePreviewData } from '../types/preview'
-import type { PatchSlideTextRequest } from '../types/task'
 
 type SlidesEditorProps = {
   data: SlidePreviewData
-  onPatchText: (request: PatchSlideTextRequest) => void
   disabled?: boolean
   isMobile?: boolean
 }
 
-export function SlidesEditor({ data, onPatchText, disabled, isMobile = false }: SlidesEditorProps) {
+export function SlidesEditor({ data, disabled, isMobile = false }: SlidesEditorProps) {
   const slides = data.slides ?? []
   const totalPages = slides.length
 
@@ -69,10 +67,7 @@ export function SlidesEditor({ data, onPatchText, disabled, isMobile = false }: 
             <input
               type="text"
               value={localTitle}
-              onChange={(e) => {
-                setLocalTitle(e.target.value)
-                onPatchText({ target: 'deckTitle', value: e.target.value })
-              }}
+              onChange={(e) => setLocalTitle(e.target.value)}
               disabled={disabled}
               placeholder="输入 PPT 标题..."
             />
@@ -84,50 +79,24 @@ export function SlidesEditor({ data, onPatchText, disabled, isMobile = false }: 
 
   const handleDeckTitleChange = (value: string) => {
     setLocalTitle(value)
-    onPatchText({ target: 'deckTitle', value })
   }
 
   const handleTitleChange = (value: string) => {
     setLocalSlideTitle(value)
-    onPatchText({
-      slideId: currentSlide?.id,
-      slideNo: safePage,
-      target: 'title',
-      value
-    })
   }
 
   const handleBodyMarkdownChange = (value: string) => {
     setLocalBodyMarkdown(value)
-    onPatchText({
-      slideId: currentSlide?.id,
-      slideNo: safePage,
-      target: 'bodyMarkdown',
-      value
-    })
   }
 
   const handleBulletChange = (index: number, value: string) => {
     const newBullets = [...localBullets]
     newBullets[index] = value
     setLocalBullets(newBullets)
-    onPatchText({
-      slideId: currentSlide?.id,
-      slideNo: safePage,
-      target: 'bullet',
-      bulletIndex: index,
-      value
-    })
   }
 
   const handleSpeakerNotesChange = (value: string) => {
     setLocalNotes(value)
-    onPatchText({
-      slideId: currentSlide?.id,
-      slideNo: safePage,
-      target: 'speakerNotes',
-      value
-    })
   }
 
   return (

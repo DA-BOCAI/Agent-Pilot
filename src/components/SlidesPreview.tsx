@@ -3,13 +3,11 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { SlidesEditor } from './SlidesEditor'
 import type { SlidePreviewData } from '../types/preview'
-import type { PatchSlideTextRequest } from '../types/task'
 
 type SlidesPreviewProps = {
   data: SlidePreviewData
   fallbackTitle: string
   isEditing?: boolean
-  onPatchText?: (request: PatchSlideTextRequest) => void
   disabled?: boolean
   isMobile?: boolean
 }
@@ -18,7 +16,6 @@ export function SlidesPreview({
   data,
   fallbackTitle,
   isEditing = false,
-  onPatchText,
   disabled = false,
   isMobile = false
 }: SlidesPreviewProps) {
@@ -54,11 +51,10 @@ export function SlidesPreview({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [goPrev, goNext])
 
-  if (isEditing && onPatchText) {
+  if (isEditing) {
     return (
       <SlidesEditor
         data={data}
-        onPatchText={onPatchText}
         disabled={disabled}
         isMobile={isMobile}
       />

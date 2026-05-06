@@ -2,7 +2,7 @@ import { getArtifactPayload } from '../domain/taskModel'
 import { getArtifactLabel } from '../domain/taskLabels'
 import { DocumentPreview } from './DocumentPreview'
 import { SlidesPreview } from './SlidesPreview'
-import type { Artifact, PatchSlideTextRequest } from '../types/task'
+import type { Artifact } from '../types/task'
 import type { DocumentPreviewData, SlidePreviewData } from '../types/preview'
 
 type ArtifactPreviewProps = {
@@ -10,7 +10,6 @@ type ArtifactPreviewProps = {
   onOutlineChange?: (outline: Array<{ id: string; level: number; title: string }>) => void
   isEditing?: boolean
   onDataChange?: (data: unknown) => void
-  onPatchSlideText?: (request: PatchSlideTextRequest) => void
   disabled?: boolean
   isMobile?: boolean
 }
@@ -20,7 +19,6 @@ export function ArtifactPreview({
   onOutlineChange,
   isEditing = false,
   onDataChange,
-  onPatchSlideText,
   disabled = false,
   isMobile = false
 }: ArtifactPreviewProps) {
@@ -45,7 +43,6 @@ export function ArtifactPreview({
         data={payload as SlidePreviewData}
         fallbackTitle={artifact.title}
         isEditing={isEditing}
-        onPatchText={onPatchSlideText}
         disabled={disabled}
         isMobile={isMobile}
       />

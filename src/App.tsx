@@ -43,7 +43,6 @@ function AppContent() {
     handleRefresh,
     handleWorkspaceConfirm,
     handleWorkspaceCancel,
-    handlePatchSlideText,
     isInitialLoading,
     isLoading,
     sseConnected,
@@ -190,7 +189,6 @@ function AppContent() {
             workspacePreview={workspace?.preview}
             isDelivered={task?.status === 'DELIVERED' || workspace?.status === 'DELIVERED'}
             onDeterministicUpdate={handleDeterministicUpdate}
-            onPatchSlideText={handlePatchSlideText}
             disabled={isLoading}
             isMobile={isMobile}
           />
