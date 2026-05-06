@@ -1,16 +1,34 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { TaskHeader } from './components/TaskHeader'
 import { StepNavigator } from './components/StepNavigator'
 import { PreviewPanel } from './components/PreviewPanel'
 import { ActionPanel } from './components/ActionPanel'
-import { AdjustmentsPanel } from './components/AdjustmentsPanel'
+// import { AdjustmentsPanel } from './components/AdjustmentsPanel'
 import { OutputsPanel } from './components/OutputsPanel'
 import { NaturalLanguageRefineInput } from './components/NaturalLanguageRefineInput'
 import { getNextActionText } from './domain/taskLabels'
 import { useTaskWorkflow } from './hooks/useTaskWorkflow'
 import './App.css'
 
+// 检测是否为移动端的 hook
+function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 767)
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 767)
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  return isMobile
+}
+
 function App() {
+  const isMobile = useIsMobile()
+  const [isRefineInputExpanded, setIsRefineInputExpanded] = useState(false)
   const {
     confirmStepId,
     error,
@@ -140,6 +158,7 @@ function App() {
                 steps={task?.planSteps ?? []}
                 workspaceSteps={workspace?.steps}
                 activeStepCode={activeStepCode}
+                isMobile={isMobile}
               />
             </div>
 
@@ -159,7 +178,7 @@ function App() {
         </aside>
 
         {/* 主预览区 */}
-        <main className="main-preview">
+        <main className={`main-preview ${isMobile && isRefineInputExpanded ? 'with-expanded-input' : ''}`}>
           <PreviewPanel
             artifacts={previewArtifacts}
             workspacePreview={workspace?.preview}
@@ -199,13 +218,13 @@ function App() {
           </div>
         </div>
 
-        {/* 调整面板（条件展开） */}
+        {/* 调整面板（条件展开）
         <AdjustmentsPanel
           adjustments={workspace?.adjustments ?? { available: false, stepId: '' }}
           onDeterministicUpdate={handleDeterministicUpdate}
           onNaturalLanguageRefine={handleNaturalLanguageRefine}
           disabled={isLoading}
-        />
+        /> */}
 
         {/* 自然语言精修输入框 */}
         {workspace?.taskId && (
@@ -214,6 +233,8 @@ function App() {
             previewStepId={workspace.preview?.stepId}
             onRefine={handleNaturalLanguageRefine}
             disabled={isLoading}
+            isMobile={isMobile}
+            onExpandChange={setIsRefineInputExpanded}
           />
         )}
       </footer>

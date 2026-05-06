@@ -6,7 +6,6 @@ import type {
   BackendWorkspace,
   CreateTaskRequest,
   PatchSlideTextRequest,
-  RefinePreviewRequest,
   TaskEvent,
   TaskView,
   UpdatePreviewRequest,
@@ -109,7 +108,11 @@ export async function refinePreview(
   stepId: string,
   instruction: string
 ): Promise<Workspace> {
-  const body: RefinePreviewRequest = { instruction }
+  const body = {
+    instruction,
+    source: 'workspace',
+    clientId: 'desktop-web',
+  }
   const workspace = await requestJson<BackendWorkspace>(
     `/tasks/${taskId}/workspace/steps/${stepId}/preview/refine`,
     {

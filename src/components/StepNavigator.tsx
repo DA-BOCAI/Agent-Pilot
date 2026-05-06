@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState, useMemo } from 'react'
 import type { PlanStep, Step } from '../types/task'
 
 type StepNavigatorProps = {
@@ -6,6 +6,7 @@ type StepNavigatorProps = {
   workspaceSteps?: Step[]
   activeStepCode: string | null
   onStepClick?: (stepId: string) => void
+  isMobile?: boolean
 }
 
 const statusConfig: Record<string, { icon: string; color: string; bg: string; border: string }> = {
@@ -18,13 +19,16 @@ const statusConfig: Record<string, { icon: string; color: string; bg: string; bo
   FAILED:      { icon: '✕', color: 'var(--danger)',       bg: 'var(--danger-soft)',  border: 'var(--danger-border)' },
 }
 
-export function StepNavigator({ steps, workspaceSteps, activeStepCode, onStepClick }: StepNavigatorProps) {
+export function StepNavigator({ steps, workspaceSteps, activeStepCode, onStepClick, isMobile = false }: StepNavigatorProps) {
+  const [isExpanded, setIsExpanded] = useState(false)
+
   const handleClick = useCallback((stepId: string) => {
     onStepClick?.(stepId)
   }, [onStepClick])
 
-  const displaySteps = workspaceSteps && workspaceSteps.length > 0
-    ? workspaceSteps.map((step, index) => ({
+  const displaySteps = useMemo(() => {
+    if (workspaceSteps && workspaceSteps.length > 0) {
+      return workspaceSteps.map((step, index) => ({
         stepId: step.stepId,
         code: `STEP_${index + 1}`,
         name: step.name,
@@ -34,7 +38,16 @@ export function StepNavigator({ steps, workspaceSteps, activeStepCode, onStepCli
         description: step.action,
         artifactType: undefined,
       }))
-    : steps
+    }
+    return steps
+  }, [workspaceSteps, steps])
+
+  const currentStepIndex = useMemo(() => {
+    return displaySteps.findIndex((step) => step.stepId === activeStepCode || step.code === activeStepCode)
+  }, [displaySteps, activeStepCode])
+
+  const currentStep = displaySteps[currentStepIndex] || displaySteps[0]
+  const currentStepCfg = currentStep ? (statusConfig[currentStep.status] || statusConfig.PENDING) : null
 
   if (!displaySteps.length) {
     return (
@@ -53,6 +66,93 @@ export function StepNavigator({ steps, workspaceSteps, activeStepCode, onStepCli
     )
   }
 
+  // 移动端紧凑模式
+  if (isMobile) {
+    return (
+      <section className="step-navigator-section step-navigator-mobile" aria-label="任务步骤">
+        {/* 紧凑进度条 */}
+        <div
+          className="step-navigator-compact-bar"
+          onClick={() => setIsExpanded(!isExpanded)}
+          role="button"
+          tabIndex={0}
+        >
+          <div className="step-compact-progress">
+            <div
+              className="step-compact-progress-fill"
+              style={{
+                width: `${((currentStepIndex + 1) / displaySteps.length) * 100}%`,
+                background: currentStepCfg?.color || 'var(--primary)',
+              }}
+            />
+          </div>
+          <div className="step-compact-info">
+            <span className="step-compact-count">
+              {currentStepIndex + 1}/{displaySteps.length}
+            </span>
+            <span className="step-compact-name" style={{ color: currentStepCfg?.color || 'var(--text)' }}>
+              {currentStep?.name || '准备中'}
+            </span>
+            <span className="step-compact-icon">{isExpanded ? '▲' : '▼'}</span>
+          </div>
+        </div>
+
+        {/* 展开的步骤列表抽屉 */}
+        {isExpanded && (
+          <div className="step-navigator-drawer">
+            <div className="step-navigator-drawer-header">
+              <span>任务步骤</span>
+              <button
+                className="step-drawer-close"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsExpanded(false)
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="step-list-compact step-list-mobile">
+              {displaySteps.map((step, index) => {
+                const cfg = statusConfig[step.status] || statusConfig.PENDING
+                const isActive = step.stepId === activeStepCode || step.code === activeStepCode
+                const isClickable = onStepClick != null
+
+                return (
+                  <div
+                    key={step.stepId}
+                    className={`step-item-compact ${isActive ? 'is-active' : ''} ${isClickable ? 'is-clickable' : ''}`}
+                    style={{
+                      '--step-color': cfg.color,
+                      '--step-bg': cfg.bg,
+                      '--step-border': cfg.border,
+                    } as React.CSSProperties}
+                    onClick={() => {
+                      if (isClickable) {
+                        handleClick(step.stepId)
+                        setIsExpanded(false)
+                      }
+                    }}
+                    role={isClickable ? 'button' : undefined}
+                    tabIndex={isClickable ? 0 : undefined}
+                  >
+                    <span className="step-number-compact">{index + 1}</span>
+                    <span className="step-name-compact">{step.name}</span>
+                    <span className="step-status-icon-compact">{cfg.icon}</span>
+                    {step.requiresConfirm && (
+                      <span className="step-confirm-hint-compact">需确认</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </section>
+    )
+  }
+
+  // 桌面端完整模式
   return (
     <section className="step-navigator-section" aria-label="任务步骤">
       <div className="step-navigator-header">

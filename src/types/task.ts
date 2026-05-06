@@ -337,6 +337,8 @@ export type UpdatePreviewRequest = {
 
 export type RefinePreviewRequest = {
   instruction: string
+  source?: string
+  clientId?: string
 }
 
 export type PatchSlideTextRequest = {
