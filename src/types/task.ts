@@ -338,3 +338,17 @@ export type UpdatePreviewRequest = {
 export type RefinePreviewRequest = {
   instruction: string
 }
+
+export type PatchSlideTextRequest = {
+  slideNo?: number
+  slideId?: string
+  target: 'deckTitle' | 'title' | 'bodyMarkdown' | 'speakerNotes' | 'bullet' | 'blockText' | 'blockItem' | 'tableCell'
+  bulletIndex?: number
+  blockIndex?: number
+  itemIndex?: number
+  rowIndex?: number
+  cellIndex?: number
+  value: string
+  source?: string
+  clientId?: string
+}

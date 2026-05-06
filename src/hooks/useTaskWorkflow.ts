@@ -8,11 +8,12 @@ import {
   updatePreview,
   confirmWorkspace,
   cancelWorkspace,
+  patchSlideText,
 } from '../api/tasks'
 import { workspaceToTaskView } from '../mappers/taskMapper'
 import { getConfirmStepId } from '../domain/taskLabels'
 import { getTaskIdFromUrl } from '../utils/urlParams'
-import type { TaskView, Workspace } from '../types/task'
+import type { PatchSlideTextRequest, TaskView, Workspace } from '../types/task'
 import type { SSEConnection } from '../api/http'
 
 const SSE_RECONNECT_DELAY = 3000
@@ -246,6 +247,26 @@ export function useTaskWorkflow() {
     })
   }
 
+  async function handlePatchSlideText(request: PatchSlideTextRequest) {
+    if (!workspace?.preview?.stepId) {
+      setError('无法修改：当前没有活动的预览')
+      return
+    }
+
+    await runAction(async () => {
+      try {
+        const updatedWorkspace = await patchSlideText(
+          workspace.taskId,
+          workspace.preview!.stepId!,
+          request
+        )
+        applyWorkspace(updatedWorkspace)
+      } catch (patchError) {
+        setError(patchError instanceof Error ? patchError.message : 'PPT 文字修改失败')
+      }
+    })
+  }
+
   return {
     confirmStepId,
     error,
@@ -256,6 +277,7 @@ export function useTaskWorkflow() {
     handleRefresh,
     handleWorkspaceConfirm,
     handleWorkspaceCancel,
+    handlePatchSlideText,
     isLoading,
     sseConnected,
     task,

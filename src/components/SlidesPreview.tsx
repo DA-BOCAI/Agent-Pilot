@@ -1,14 +1,25 @@
 import { useState, useEffect, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { SlidesEditor } from './SlidesEditor'
 import type { SlidePreviewData } from '../types/preview'
+import type { PatchSlideTextRequest } from '../types/task'
 
 type SlidesPreviewProps = {
   data: SlidePreviewData
   fallbackTitle: string
+  isEditing?: boolean
+  onPatchText?: (request: PatchSlideTextRequest) => void
+  disabled?: boolean
 }
 
-export function SlidesPreview({ data, fallbackTitle }: SlidesPreviewProps) {
+export function SlidesPreview({ 
+  data, 
+  fallbackTitle,
+  isEditing = false,
+  onPatchText,
+  disabled = false
+}: SlidesPreviewProps) {
   const slides = data.slides ?? []
   const totalPages = slides.length
 
@@ -40,6 +51,16 @@ export function SlidesPreview({ data, fallbackTitle }: SlidesPreviewProps) {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [goPrev, goNext])
+
+  if (isEditing && onPatchText) {
+    return (
+      <SlidesEditor
+        data={data}
+        onPatchText={onPatchText}
+        disabled={disabled}
+      />
+    )
+  }
 
   if (!slides.length) {
     return (

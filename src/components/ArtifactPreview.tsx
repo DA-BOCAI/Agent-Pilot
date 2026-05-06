@@ -2,7 +2,7 @@ import { getArtifactPayload } from '../domain/taskModel'
 import { getArtifactLabel } from '../domain/taskLabels'
 import { DocumentPreview } from './DocumentPreview'
 import { SlidesPreview } from './SlidesPreview'
-import type { Artifact } from '../types/task'
+import type { Artifact, PatchSlideTextRequest } from '../types/task'
 import type { DocumentPreviewData, SlidePreviewData } from '../types/preview'
 
 type ArtifactPreviewProps = {
@@ -10,6 +10,7 @@ type ArtifactPreviewProps = {
   onOutlineChange?: (outline: Array<{ id: string; level: number; title: string }>) => void
   isEditing?: boolean
   onDataChange?: (data: unknown) => void
+  onPatchSlideText?: (request: PatchSlideTextRequest) => void
   disabled?: boolean
 }
 
@@ -18,6 +19,7 @@ export function ArtifactPreview({
   onOutlineChange,
   isEditing = false,
   onDataChange,
+  onPatchSlideText,
   disabled = false
 }: ArtifactPreviewProps) {
   const payload = getArtifactPayload(artifact)
@@ -36,7 +38,15 @@ export function ArtifactPreview({
   }
 
   if (artifact.type === 'slides' && payload && typeof payload === 'object') {
-    return <SlidesPreview data={payload as SlidePreviewData} fallbackTitle={artifact.title} />
+    return (
+      <SlidesPreview 
+        data={payload as SlidePreviewData} 
+        fallbackTitle={artifact.title}
+        isEditing={isEditing}
+        onPatchText={onPatchSlideText}
+        disabled={disabled}
+      />
+    )
   }
 
   return (

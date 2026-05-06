@@ -20,6 +20,7 @@ function App() {
     handleRefresh,
     handleWorkspaceConfirm,
     handleWorkspaceCancel,
+    handlePatchSlideText,
     isLoading,
     sseConnected,
     task,
@@ -114,6 +115,7 @@ function App() {
             workspacePreview={workspace?.preview}
             isDelivered={task?.status === 'DELIVERED' || workspace?.status === 'DELIVERED'}
             onDeterministicUpdate={handleDeterministicUpdate}
+            onPatchSlideText={handlePatchSlideText}
             disabled={isLoading}
           />
         </main>

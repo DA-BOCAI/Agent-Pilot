@@ -3,13 +3,14 @@ import { ArtifactPreview } from './ArtifactPreview'
 import { EmptyState } from './EmptyState'
 import OutlinePanel from './OutlinePanel'
 import { getArtifactLabel } from '../domain/taskLabels'
-import type { Artifact, Preview } from '../types/task'
+import type { Artifact, PatchSlideTextRequest, Preview } from '../types/task'
 
 type PreviewPanelProps = {
   artifacts: Artifact[]
   workspacePreview?: Preview
   isDelivered: boolean
   onDeterministicUpdate?: (previewData: unknown) => void
+  onPatchSlideText?: (request: PatchSlideTextRequest) => void
   disabled?: boolean
 }
 
@@ -18,6 +19,7 @@ export function PreviewPanel({
   workspacePreview, 
   isDelivered, 
   onDeterministicUpdate,
+  onPatchSlideText,
   disabled = false 
 }: PreviewPanelProps) {
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -214,6 +216,7 @@ export function PreviewPanel({
                   onOutlineChange={handleOutlineChange}
                   isEditing={true}
                   onDataChange={handleDataChange}
+                  onPatchSlideText={onPatchSlideText}
                   disabled={disabled}
                 />
               )}

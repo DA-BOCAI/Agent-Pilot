@@ -835,6 +835,154 @@ button, input, textarea, select {
   background: var(--paper-soft);
 }
 
+/* 幻灯片编辑器 */
+.slides-editor {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+
+.slides-editor .slide-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+.slides-editor .slide-outline {
+  flex-shrink: 0;
+  width: 240px;
+  background: var(--paper-soft);
+  border-right: 1px solid var(--line-light);
+  display: flex;
+  flex-direction: column;
+}
+
+.slides-editor .slide-outline.is-collapsed {
+  width: 40px;
+}
+
+.slides-editor .slide-outline-header {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--line-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.slides-editor .slide-outline-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-1);
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.slides-editor .slide-outline-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+}
+
+.slides-editor .slide-outline-item {
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  color: var(--text);
+  transition: background-color var(--transition-fast);
+}
+
+.slides-editor .slide-outline-item:hover {
+  background: var(--paper);
+}
+
+.slides-editor .slide-outline-item.is-active {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.slides-editor .slide-outline-item-no {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  min-width: 24px;
+}
+
+.slides-editor .slide-outline-item.is-active .slide-outline-item-no {
+  color: var(--primary);
+}
+
+.slides-editor .slide-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-top: 1px solid var(--line-light);
+}
+
+.slides-editor .slide-nav-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line-light);
+  background: var(--paper);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.slides-editor .slide-nav-btn:hover:not(:disabled) {
+  background: var(--paper-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.slides-editor .slide-nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.slides-editor .slide-nav-indicator {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.slides-editor .slide-bullets-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.slides-editor .slide-bullet-input {
+  width: 100%;
+}
+
+.slides-editor .slide-content-textarea {
+  min-height: 200px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+.slides-editor .slide-notes-textarea {
+  min-height: 80px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .loading-spinner {
   width: 32px;
   height: 32px;

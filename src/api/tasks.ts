@@ -5,6 +5,7 @@ import type {
   BackendTaskView,
   BackendWorkspace,
   CreateTaskRequest,
+  PatchSlideTextRequest,
   RefinePreviewRequest,
   TaskEvent,
   TaskView,
@@ -147,5 +148,27 @@ export async function cancelWorkspace(
       body: JSON.stringify({ stepId, comment: comment ?? '用户在工作台取消' }),
     }
   )
+  return mapWorkspace(workspace)
+}
+
+export async function patchSlideText(
+  taskId: string,
+  stepId: string,
+  request: PatchSlideTextRequest
+): Promise<Workspace> {
+  const body = {
+    ...request,
+    source: request.source ?? 'workspace',
+    clientId: request.clientId ?? 'desktop-web'
+  }
+  
+  const workspace = await requestJson<BackendWorkspace>(
+    `/tasks/${taskId}/workspace/steps/${stepId}/preview/text`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(body)
+    }
+  )
+  
   return mapWorkspace(workspace)
 }
