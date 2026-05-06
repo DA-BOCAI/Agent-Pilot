@@ -12,15 +12,17 @@ type ArtifactPreviewProps = {
   onDataChange?: (data: unknown) => void
   onPatchSlideText?: (request: PatchSlideTextRequest) => void
   disabled?: boolean
+  isMobile?: boolean
 }
 
-export function ArtifactPreview({ 
-  artifact, 
+export function ArtifactPreview({
+  artifact,
   onOutlineChange,
   isEditing = false,
   onDataChange,
   onPatchSlideText,
-  disabled = false
+  disabled = false,
+  isMobile = false
 }: ArtifactPreviewProps) {
   const payload = getArtifactPayload(artifact)
 
@@ -39,12 +41,13 @@ export function ArtifactPreview({
 
   if (artifact.type === 'slides' && payload && typeof payload === 'object') {
     return (
-      <SlidesPreview 
-        data={payload as SlidePreviewData} 
+      <SlidesPreview
+        data={payload as SlidePreviewData}
         fallbackTitle={artifact.title}
         isEditing={isEditing}
         onPatchText={onPatchSlideText}
         disabled={disabled}
+        isMobile={isMobile}
       />
     )
   }

@@ -6,9 +6,10 @@ type SlidesEditorProps = {
   data: SlidePreviewData
   onPatchText: (request: PatchSlideTextRequest) => void
   disabled?: boolean
+  isMobile?: boolean
 }
 
-export function SlidesEditor({ data, onPatchText, disabled }: SlidesEditorProps) {
+export function SlidesEditor({ data, onPatchText, disabled, isMobile = false }: SlidesEditorProps) {
   const slides = data.slides ?? []
   const totalPages = slides.length
 
@@ -104,33 +105,36 @@ export function SlidesEditor({ data, onPatchText, disabled }: SlidesEditorProps)
 
   return (
     <div className="slides-editor">
-      <aside className={`slide-outline${outlineCollapsed ? ' is-collapsed' : ''}`}>
-        <div className="slide-outline-header">
-          {!outlineCollapsed && <span>目录</span>}
-          <button
-            className="slide-outline-toggle"
-            onClick={() => setOutlineCollapsed((v) => !v)}
-            aria-label={outlineCollapsed ? '展开目录' : '收起目录'}
-            type="button"
-          >
-            {outlineCollapsed ? '▸' : '◂'}
-          </button>
-        </div>
-        {!outlineCollapsed && (
-          <ul className="slide-outline-list">
-            {slides.map((slide, index) => (
-              <li
-                key={slide.id ?? `${slide.title ?? 'slide'}-${index}`}
-                className={`slide-outline-item${safePage === index + 1 ? ' is-active' : ''}`}
-                onClick={() => goToPage(index + 1)}
-              >
-                <span className="slide-outline-item-no">{String(slide.slideNo ?? index + 1).padStart(2, '0')}</span>
-                <span>{slide.title ?? `Slide ${index + 1}`}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </aside>
+      {/* 移动端隐藏大纲侧边栏 */}
+      {!isMobile && (
+        <aside className={`slide-outline${outlineCollapsed ? ' is-collapsed' : ''}`}>
+          <div className="slide-outline-header">
+            {!outlineCollapsed && <span>目录</span>}
+            <button
+              className="slide-outline-toggle"
+              onClick={() => setOutlineCollapsed((v) => !v)}
+              aria-label={outlineCollapsed ? '展开目录' : '收起目录'}
+              type="button"
+            >
+              {outlineCollapsed ? '▸' : '◂'}
+            </button>
+          </div>
+          {!outlineCollapsed && (
+            <ul className="slide-outline-list">
+              {slides.map((slide, index) => (
+                <li
+                  key={slide.id ?? `${slide.title ?? 'slide'}-${index}`}
+                  className={`slide-outline-item${safePage === index + 1 ? ' is-active' : ''}`}
+                  onClick={() => goToPage(index + 1)}
+                >
+                  <span className="slide-outline-item-no">{String(slide.slideNo ?? index + 1).padStart(2, '0')}</span>
+                  <span>{slide.title ?? `Slide ${index + 1}`}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
+      )}
 
       <div className="slide-main">
         <div className="editor-field">

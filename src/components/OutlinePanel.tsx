@@ -12,6 +12,7 @@ type OutlinePanelProps = {
   onItemClick?: (id: string) => void
   collapsed?: boolean
   onToggleCollapse?: () => void
+  isMobile?: boolean
 }
 
 const OutlinePanel: React.FC<OutlinePanelProps> = ({
@@ -20,7 +21,13 @@ const OutlinePanel: React.FC<OutlinePanelProps> = ({
   onItemClick,
   collapsed = false,
   onToggleCollapse,
+  isMobile = false,
 }) => {
+  // 移动端不渲染大纲
+  if (isMobile) {
+    return null
+  }
+
   if (!items || items.length === 0) {
     return null
   }

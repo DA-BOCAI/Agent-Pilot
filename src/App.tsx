@@ -186,6 +186,7 @@ function App() {
             onDeterministicUpdate={handleDeterministicUpdate}
             onPatchSlideText={handlePatchSlideText}
             disabled={isLoading}
+            isMobile={isMobile}
           />
         </main>
       </div>

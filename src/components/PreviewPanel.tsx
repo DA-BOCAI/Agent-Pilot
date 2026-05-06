@@ -12,15 +12,17 @@ type PreviewPanelProps = {
   onDeterministicUpdate?: (previewData: unknown) => void
   onPatchSlideText?: (request: PatchSlideTextRequest) => void
   disabled?: boolean
+  isMobile?: boolean
 }
 
-export function PreviewPanel({ 
-  artifacts, 
-  workspacePreview, 
-  isDelivered, 
+export function PreviewPanel({
+  artifacts,
+  workspacePreview,
+  isDelivered,
   onDeterministicUpdate,
   onPatchSlideText,
-  disabled = false 
+  disabled = false,
+  isMobile = false
 }: PreviewPanelProps) {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
@@ -257,6 +259,7 @@ export function PreviewPanel({
                 onItemClick={handleOutlineItemClick}
                 collapsed={outlineCollapsed}
                 onToggleCollapse={() => setOutlineCollapsed(c => !c)}
+                isMobile={isMobile}
               />
             </div>
           ) : isSlidesType ? (

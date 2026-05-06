@@ -3,7 +3,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 type NaturalLanguageRefineInputProps = {
   previewType?: 'doc' | 'slides'
   previewStepId?: string
-  onRefine: (stepId: string, instruction: string) => Promise<void>
+  onRefine: (instruction: string) => Promise<void>
   disabled?: boolean
   isMobile?: boolean
   onExpandChange?: (expanded: boolean) => void
@@ -85,7 +85,7 @@ export function NaturalLanguageRefineInput({
     setError('')
 
     try {
-      await onRefine(stepId, instruction.trim())
+      await onRefine(instruction.trim())
       setInstruction('')
       if (isMobile) {
         setIsExpanded(false)
