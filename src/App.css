@@ -1184,6 +1184,89 @@ button, input, textarea, select {
   align-self: flex-start;
 }
 
+/* ===== NaturalLanguageRefineInput 底部精修输入框 ===== */
+.natural-language-refine-input {
+  border-top: 1px solid var(--line-light);
+  background: var(--paper-soft);
+}
+
+.natural-language-refine-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-5);
+}
+
+.natural-language-refine-body {
+  padding: var(--space-3) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.natural-language-refine-input-wrapper {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.natural-language-refine-textarea {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background: var(--paper);
+  color: var(--text);
+  resize: vertical;
+  min-height: 48px;
+  font-family: inherit;
+  line-height: 1.5;
+  transition: border-color var(--transition-fast);
+}
+
+.natural-language-refine-textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.natural-language-refine-textarea:disabled {
+  background: var(--paper-soft);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.natural-language-refine-textarea::placeholder {
+  color: var(--placeholder);
+}
+
+.natural-language-refine-submit {
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+.natural-language-refine-error {
+  padding: var(--space-2) var(--space-3);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-sm);
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.natural-language-refine-empty {
+  padding: var(--space-4) var(--space-5);
+  text-align: center;
+}
+
+.natural-language-refine-hint {
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
+}
+
 /* ===== 文档/幻灯片预览 ===== */
 .doc-preview,
 .slides-preview,
@@ -2198,6 +2281,27 @@ button, input, textarea, select {
   .adjustments-submit-btn {
     align-self: stretch;
     width: 100%;
+  }
+
+  /* 自然语言精修输入框 */
+  .natural-language-refine-header,
+  .natural-language-refine-body {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .natural-language-refine-input-wrapper {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .natural-language-refine-textarea {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .natural-language-refine-submit {
+    width: 100%;
+    min-width: 0;
   }
 
   /* 幻灯片 */

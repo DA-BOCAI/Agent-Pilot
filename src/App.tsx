@@ -5,6 +5,7 @@ import { PreviewPanel } from './components/PreviewPanel'
 import { ActionPanel } from './components/ActionPanel'
 import { AdjustmentsPanel } from './components/AdjustmentsPanel'
 import { OutputsPanel } from './components/OutputsPanel'
+import { NaturalLanguageRefineInput } from './components/NaturalLanguageRefineInput'
 import { getNextActionText } from './domain/taskLabels'
 import { useTaskWorkflow } from './hooks/useTaskWorkflow'
 import './App.css'
@@ -156,6 +157,16 @@ function App() {
           onNaturalLanguageRefine={handleNaturalLanguageRefine}
           disabled={isLoading}
         />
+
+        {/* 自然语言精修输入框 */}
+        {workspace?.taskId && (
+          <NaturalLanguageRefineInput
+            previewType={workspace.preview?.type}
+            previewStepId={workspace.preview?.stepId}
+            onRefine={handleNaturalLanguageRefine}
+            disabled={isLoading}
+          />
+        )}
       </footer>
     </div>
   )
