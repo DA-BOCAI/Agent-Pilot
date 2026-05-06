@@ -6,6 +6,9 @@ import { ActionPanel } from './components/ActionPanel'
 // import { AdjustmentsPanel } from './components/AdjustmentsPanel'
 import { OutputsPanel } from './components/OutputsPanel'
 import { NaturalLanguageRefineInput } from './components/NaturalLanguageRefineInput'
+import { ToastContainer } from './components/Toast'
+import { ToastProvider } from './contexts/ToastContext'
+import { useToast } from './contexts/useToast'
 import { getNextActionText } from './domain/taskLabels'
 import { useTaskWorkflow } from './hooks/useTaskWorkflow'
 import './App.css'
@@ -26,9 +29,10 @@ function useIsMobile(): boolean {
   return isMobile
 }
 
-function App() {
+function AppContent() {
   const isMobile = useIsMobile()
   const [isRefineInputExpanded, setIsRefineInputExpanded] = useState(false)
+  const { showToast } = useToast()
   const {
     confirmStepId,
     error,
@@ -45,7 +49,9 @@ function App() {
     sseConnected,
     task,
     workspace,
-  } = useTaskWorkflow()
+  } = useTaskWorkflow({
+    onSuccess: (message) => showToast(message),
+  })
 
   const activeStepCode = useMemo(() => {
     if (workspace?.steps?.length) {
@@ -239,7 +245,16 @@ function App() {
           />
         )}
       </footer>
+      <ToastContainer />
     </div>
+  )
+}
+
+function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
   )
 }
 

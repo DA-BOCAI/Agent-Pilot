@@ -19,7 +19,11 @@ import type { SSEConnection } from '../api/http'
 const SSE_RECONNECT_DELAY = 3000
 const SSE_MAX_RECONNECT_ATTEMPTS = 5
 
-export function useTaskWorkflow() {
+type UseTaskWorkflowOptions = {
+  onSuccess?: (message: string) => void
+}
+
+export function useTaskWorkflow(options?: UseTaskWorkflowOptions) {
   const [task, setTask] = useState<TaskView | null>(null)
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -211,6 +215,9 @@ export function useTaskWorkflow() {
           previewData
         )
         applyWorkspace(updatedWorkspace)
+        const previewType = workspace.preview?.type
+        const message = previewType === 'slides' ? 'PPT修改成功' : '文档修改成功'
+        options?.onSuccess?.(message)
       } catch (updateError) {
         setError(updateError instanceof Error ? updateError.message : '确定性更新失败')
       }
@@ -231,6 +238,7 @@ export function useTaskWorkflow() {
           instruction
         )
         applyWorkspace(updatedWorkspace)
+        options?.onSuccess?.('内容调整成功')
       } catch (refineError) {
         setError(refineError instanceof Error ? refineError.message : '自然语言精修失败')
       }
@@ -285,6 +293,7 @@ export function useTaskWorkflow() {
           request
         )
         applyWorkspace(updatedWorkspace)
+        options?.onSuccess?.('PPT修改成功')
       } catch (patchError) {
         setError(patchError instanceof Error ? patchError.message : 'PPT 文字修改失败')
       }
