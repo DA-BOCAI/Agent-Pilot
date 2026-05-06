@@ -19,6 +19,12 @@ export function SlidesEditor({ data, onPatchText, disabled, isMobile = false }: 
   const safePage = Math.min(Math.max(1, currentPage), totalPages || 1)
   const currentSlide = slides[safePage - 1]
 
+  const [localTitle, setLocalTitle] = useState(data.title ?? '')
+  const [localSlideTitle, setLocalSlideTitle] = useState(currentSlide?.title ?? '')
+  const [localBodyMarkdown, setLocalBodyMarkdown] = useState(currentSlide?.bodyMarkdown ?? '')
+  const [localBullets, setLocalBullets] = useState<string[]>(currentSlide?.bullets ?? [])
+  const [localNotes, setLocalNotes] = useState(currentSlide?.notes ?? '')
+
   const goToPage = useCallback((page: number) => {
     setCurrentPage(page)
   }, [])
@@ -43,6 +49,17 @@ export function SlidesEditor({ data, onPatchText, disabled, isMobile = false }: 
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [goPrev, goNext])
 
+  useEffect(() => {
+    setLocalTitle(data.title ?? '')
+  }, [data.title])
+
+  useEffect(() => {
+    setLocalSlideTitle(currentSlide?.title ?? '')
+    setLocalBodyMarkdown(currentSlide?.bodyMarkdown ?? '')
+    setLocalBullets(currentSlide?.bullets ?? [])
+    setLocalNotes(currentSlide?.notes ?? '')
+  }, [currentSlide])
+
   if (!slides.length) {
     return (
       <div className="slides-editor">
@@ -51,8 +68,11 @@ export function SlidesEditor({ data, onPatchText, disabled, isMobile = false }: 
             <label>PPT 标题</label>
             <input
               type="text"
-              value={data.title ?? ''}
-              onChange={(e) => onPatchText({ target: 'deckTitle', value: e.target.value })}
+              value={localTitle}
+              onChange={(e) => {
+                setLocalTitle(e.target.value)
+                onPatchText({ target: 'deckTitle', value: e.target.value })
+              }}
               disabled={disabled}
               placeholder="输入 PPT 标题..."
             />
@@ -63,10 +83,12 @@ export function SlidesEditor({ data, onPatchText, disabled, isMobile = false }: 
   }
 
   const handleDeckTitleChange = (value: string) => {
+    setLocalTitle(value)
     onPatchText({ target: 'deckTitle', value })
   }
 
   const handleTitleChange = (value: string) => {
+    setLocalSlideTitle(value)
     onPatchText({
       slideId: currentSlide?.id,
       slideNo: safePage,
@@ -76,6 +98,7 @@ export function SlidesEditor({ data, onPatchText, disabled, isMobile = false }: 
   }
 
   const handleBodyMarkdownChange = (value: string) => {
+    setLocalBodyMarkdown(value)
     onPatchText({
       slideId: currentSlide?.id,
       slideNo: safePage,
@@ -85,6 +108,9 @@ export function SlidesEditor({ data, onPatchText, disabled, isMobile = false }: 
   }
 
   const handleBulletChange = (index: number, value: string) => {
+    const newBullets = [...localBullets]
+    newBullets[index] = value
+    setLocalBullets(newBullets)
     onPatchText({
       slideId: currentSlide?.id,
       slideNo: safePage,
@@ -95,6 +121,7 @@ export function SlidesEditor({ data, onPatchText, disabled, isMobile = false }: 
   }
 
   const handleSpeakerNotesChange = (value: string) => {
+    setLocalNotes(value)
     onPatchText({
       slideId: currentSlide?.id,
       slideNo: safePage,
@@ -141,7 +168,7 @@ export function SlidesEditor({ data, onPatchText, disabled, isMobile = false }: 
           <label>PPT 标题</label>
           <input
             type="text"
-            value={data.title ?? ''}
+            value={localTitle}
             onChange={(e) => handleDeckTitleChange(e.target.value)}
             disabled={disabled}
             placeholder="输入 PPT 标题..."
@@ -152,7 +179,7 @@ export function SlidesEditor({ data, onPatchText, disabled, isMobile = false }: 
           <label>幻灯片标题</label>
           <input
             type="text"
-            value={currentSlide?.title ?? ''}
+            value={localSlideTitle}
             onChange={(e) => handleTitleChange(e.target.value)}
             disabled={disabled}
             placeholder="输入幻灯片标题..."
@@ -175,7 +202,7 @@ export function SlidesEditor({ data, onPatchText, disabled, isMobile = false }: 
           <div className="editor-field">
             <label>列表项</label>
             <div className="slide-bullets-editor">
-              {currentSlide.bullets.map((bullet, index) => (
+              {localBullets.map((bullet, index) => (
                 <input
                   key={index}
                   type="text"
@@ -192,7 +219,7 @@ export function SlidesEditor({ data, onPatchText, disabled, isMobile = false }: 
           <div className="editor-field">
             <label>内容</label>
             <textarea
-              value={currentSlide.bodyMarkdown}
+              value={localBodyMarkdown}
               onChange={(e) => handleBodyMarkdownChange(e.target.value)}
               disabled={disabled}
               placeholder="输入内容..."
@@ -205,7 +232,7 @@ export function SlidesEditor({ data, onPatchText, disabled, isMobile = false }: 
         <div className="editor-field">
           <label>备注</label>
           <textarea
-            value={currentSlide?.notes ?? ''}
+            value={localNotes}
             onChange={(e) => handleSpeakerNotesChange(e.target.value)}
             disabled={disabled}
             placeholder="输入备注..."

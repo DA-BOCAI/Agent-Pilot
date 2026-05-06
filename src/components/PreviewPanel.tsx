@@ -151,6 +151,17 @@ export function PreviewPanel({
     return () => observer.disconnect()
   }, [outlineItems])
 
+  useEffect(() => {
+    if (isEditing && workspacePreview?.data) {
+      try {
+        const dataCopy = JSON.parse(JSON.stringify(workspacePreview.data))
+        setEditedData(dataCopy)
+      } catch (error) {
+        console.error('Failed to sync edited data:', error)
+      }
+    }
+  }, [workspacePreview?.data, isEditing])
+
   const isDocWithOutline = activeArtifact?.type === 'doc' && outlineItems.length > 0
   const isSlidesType = activeArtifact?.type === 'slides'
 
