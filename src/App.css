@@ -1556,13 +1556,18 @@ button, input, textarea, select {
   min-width: 0;
 }
 
+.slide-main > header {
+  flex-shrink: 0;
+}
+
 .slide-stage-wrapper {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--space-2);
-  overflow: hidden;
+  overflow: auto;
+  min-height: 0;
 }
 
 .slide-stage {
@@ -1631,6 +1636,7 @@ button, input, textarea, select {
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--line-light);
   background: var(--paper-soft);
+  flex-shrink: 0;
 }
 
 .slide-nav-btn {
@@ -2780,6 +2786,14 @@ button, input, textarea, select {
 
   .slide-stage-wrapper {
     padding: var(--space-1);
+  }
+
+  .slides-preview-wrapper {
+    padding-bottom: 60px;
+  }
+
+  .slide-nav {
+    margin-bottom: 44px;
   }
 
   .slide-stage-title {
