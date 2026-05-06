@@ -72,18 +72,12 @@ export function ActionPanel({
 
   if (status === 'WAIT_CONFIRM' && confirmation?.available) {
     return (
-      <div className="action-stack split">
-        {confirmation.title && (
-          <div className="confirmation-title">{confirmation.title}</div>
-        )}
-        {confirmation.description && (
-          <div className="confirmation-description">{confirmation.description}</div>
-        )}
+      <div className="action-stack">
         <button className="btn btn-primary" disabled={disabled} onClick={() => onConfirm(true)}>
-          通过
+          ✓ 通过
         </button>
         <button className="btn btn-secondary" disabled={disabled} onClick={() => onConfirm(false)}>
-          拒绝
+          ✕ 拒绝
         </button>
       </div>
     )

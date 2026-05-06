@@ -23,13 +23,22 @@ export function useTaskWorkflow() {
   const [task, setTask] = useState<TaskView | null>(null)
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isInitialLoading, setIsInitialLoading] = useState(() => !!getTaskIdFromUrl())
   const [error, setError] = useState('')
   const [sseConnected, setSseConnected] = useState(false)
+
+  const resolvedRef = useRef(false)
 
   const sseConnectionRef = useRef<SSEConnection | null>(null)
   const reconnectAttemptsRef = useRef(0)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isUnmountedRef = useRef(false)
+
+  const resolveInitialLoading = useCallback(() => {
+    if (resolvedRef.current) return
+    resolvedRef.current = true
+    setIsInitialLoading(false)
+  }, [])
 
   const confirmStepId = task ? getConfirmStepId(task.nextAction) : null
 
@@ -68,6 +77,7 @@ export function useTaskWorkflow() {
         setTask(workspaceToTaskView(ws))
         setSseConnected(true)
         reconnectAttemptsRef.current = 0
+        resolveInitialLoading()
       },
       onWorkspace: (ws: Workspace) => {
         if (isUnmountedRef.current) return
@@ -75,6 +85,7 @@ export function useTaskWorkflow() {
         setTask(workspaceToTaskView(ws))
         setSseConnected(true)
         reconnectAttemptsRef.current = 0
+        resolveInitialLoading()
       },
       onError: async () => {
         if (isUnmountedRef.current) return
@@ -98,28 +109,42 @@ export function useTaskWorkflow() {
     })
 
     sseConnectionRef.current = connection
-  }, [closeSSEConnection, fallbackToGetWorkspace])
+  }, [closeSSEConnection, fallbackToGetWorkspace, resolveInitialLoading])
 
   useEffect(() => {
     const taskId = getTaskIdFromUrl()
-    if (!taskId) return
+    if (!taskId) {
+      setIsInitialLoading(false)
+      return
+    }
 
+    isUnmountedRef.current = false
+    resolvedRef.current = false
+    setIsInitialLoading(true)
+
+    // REST GET 和 SSE 并行发起，谁先到谁先渲染
     void runAction(async () => {
       try {
         const existingWorkspace = await getWorkspace(taskId)
-        setWorkspace(existingWorkspace)
-        setTask(workspaceToTaskView(existingWorkspace))
-        connectSSE(taskId)
+        if (!isUnmountedRef.current) {
+          setWorkspace(existingWorkspace)
+          setTask(workspaceToTaskView(existingWorkspace))
+          resolveInitialLoading()
+        }
       } catch {
-        // 接口失败时不恢复任何数据，不显示内容
+        if (!isUnmountedRef.current) {
+          resolveInitialLoading()
+        }
       }
     })
+
+    connectSSE(taskId)
 
     return () => {
       isUnmountedRef.current = true
       closeSSEConnection()
     }
-  }, [connectSSE, closeSSEConnection])
+  }, [connectSSE, closeSSEConnection, resolveInitialLoading])
 
   async function runAction(action: () => Promise<void>) {
     setIsLoading(true)
@@ -278,6 +303,7 @@ export function useTaskWorkflow() {
     handleWorkspaceConfirm,
     handleWorkspaceCancel,
     handlePatchSlideText,
+    isInitialLoading,
     isLoading,
     sseConnected,
     task,

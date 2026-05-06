@@ -22,6 +22,7 @@ function App() {
     handleWorkspaceConfirm,
     handleWorkspaceCancel,
     handlePatchSlideText,
+    isInitialLoading,
     isLoading,
     sseConnected,
     task,
@@ -56,6 +57,54 @@ function App() {
 
   const doneCount = displaySteps.filter((s) => s.status === 'DONE' || s.status === 'APPROVED' || s.status === 'WAIT_CONFIRM').length
   const progress = displaySteps.length ? Math.round((doneCount / displaySteps.length) * 100) : 0
+
+  if (isInitialLoading) {
+    return (
+      <div className="app-shell">
+        <header className="top-bar">
+          <div className="top-bar-inner">
+            <div className="skeleton-row">
+              <div className="skeleton-block skeleton-badge" />
+              <div className="skeleton-block skeleton-title" />
+            </div>
+            <div className="skeleton-row">
+              <div className="skeleton-block skeleton-progress" />
+            </div>
+          </div>
+        </header>
+        <div className="main-layout">
+          <aside className="sidebar">
+            <div className="sidebar-inner">
+              <div className="skeleton-section">
+                <div className="skeleton-block skeleton-heading" />
+                {Array.from({ length: 4 }, (_, i) => (
+                  <div key={i} className="skeleton-block skeleton-step" />
+                ))}
+              </div>
+              <div className="skeleton-section">
+                <div className="skeleton-block skeleton-heading" />
+                <div className="skeleton-block skeleton-output" />
+              </div>
+            </div>
+          </aside>
+          <main className="main-preview">
+            <div className="skeleton-section">
+              <div className="skeleton-block skeleton-heading" />
+              <div className="skeleton-block skeleton-preview" />
+            </div>
+          </main>
+        </div>
+        <footer className="bottom-bar">
+          <div className="bottom-bar-inner">
+            <div className="skeleton-row">
+              <div className="skeleton-block skeleton-action" />
+              <div className="skeleton-block skeleton-btn" />
+            </div>
+          </div>
+        </footer>
+      </div>
+    )
+  }
 
   return (
     <div className="app-shell">

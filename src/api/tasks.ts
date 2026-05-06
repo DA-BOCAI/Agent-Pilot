@@ -95,7 +95,7 @@ export async function updatePreview(
 ): Promise<Workspace> {
   const body: UpdatePreviewRequest = { previewData }
   const workspace = await requestJson<BackendWorkspace>(
-    `/tasks/${taskId}/steps/${stepId}/preview`,
+    `/tasks/${taskId}/workspace/steps/${stepId}/preview`,
     {
       method: 'PUT',
       body: JSON.stringify(body),
@@ -111,7 +111,7 @@ export async function refinePreview(
 ): Promise<Workspace> {
   const body: RefinePreviewRequest = { instruction }
   const workspace = await requestJson<BackendWorkspace>(
-    `/tasks/${taskId}/steps/${stepId}/preview/refine`,
+    `/tasks/${taskId}/workspace/steps/${stepId}/preview/refine`,
     {
       method: 'POST',
       body: JSON.stringify(body),

@@ -69,6 +69,80 @@
   scroll-behavior: smooth;
 }
 
+/* ===== 骨架屏 ===== */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+.skeleton-block {
+  border-radius: var(--radius-sm);
+  background: var(--line-light);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.skeleton-badge {
+  width: 80px;
+  height: 20px;
+  border-radius: var(--radius-full);
+}
+
+.skeleton-title {
+  width: 200px;
+  height: 20px;
+}
+
+.skeleton-progress {
+  width: 100%;
+  height: 4px;
+  border-radius: var(--radius-full);
+}
+
+.skeleton-heading {
+  width: 60px;
+  height: 14px;
+  margin-bottom: var(--space-2);
+}
+
+.skeleton-step {
+  width: 100%;
+  height: 36px;
+  margin-bottom: var(--space-1);
+}
+
+.skeleton-output {
+  width: 100%;
+  height: 44px;
+}
+
+.skeleton-preview {
+  width: 100%;
+  flex: 1;
+  min-height: 400px;
+}
+
+.skeleton-action {
+  width: 160px;
+  height: 16px;
+}
+
+.skeleton-btn {
+  width: 120px;
+  height: 32px;
+}
+
+.skeleton-section {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
 /* ===== 全局重置 ===== */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -1187,48 +1261,37 @@ button, input, textarea, select {
 /* ===== NaturalLanguageRefineInput 底部精修输入框 ===== */
 .natural-language-refine-input {
   border-top: 1px solid var(--line-light);
-  background: var(--paper-soft);
-}
-
-.natural-language-refine-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-3) var(--space-5);
-}
-
-.natural-language-refine-body {
-  padding: var(--space-3) var(--space-5);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+  background: var(--paper);
+  padding: var(--space-2) var(--space-5);
 }
 
 .natural-language-refine-input-wrapper {
   display: flex;
-  gap: var(--space-3);
-  align-items: flex-start;
+  gap: var(--space-2);
+  align-items: center;
 }
 
 .natural-language-refine-textarea {
   flex: 1;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
   font-size: 13px;
-  background: var(--paper);
+  background: var(--paper-soft);
   color: var(--text);
-  resize: vertical;
-  min-height: 48px;
+  resize: none;
+  min-height: 36px;
+  max-height: 36px;
   font-family: inherit;
   line-height: 1.5;
-  transition: border-color var(--transition-fast);
+  transition: all var(--transition-fast);
 }
 
 .natural-language-refine-textarea:focus {
   outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
+  background: var(--paper);
+  border-color: var(--line);
+  box-shadow: 0 0 0 2px var(--primary-soft);
 }
 
 .natural-language-refine-textarea:disabled {
@@ -1243,28 +1306,31 @@ button, input, textarea, select {
 
 .natural-language-refine-submit {
   flex-shrink: 0;
-  min-width: 80px;
+  min-width: 60px;
+  min-height: 32px;
+  padding: var(--space-1) var(--space-3);
+  font-size: 12px;
 }
 
 .natural-language-refine-error {
-  padding: var(--space-2) var(--space-3);
+  margin-top: var(--space-2);
+  padding: var(--space-1) var(--space-3);
   background: var(--danger-soft);
   border: 1px solid var(--danger-border);
   border-radius: var(--radius-sm);
   color: var(--danger);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
 }
 
 .natural-language-refine-empty {
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-3) var(--space-5);
   text-align: center;
 }
 
 .natural-language-refine-hint {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--muted);
-  font-style: italic;
 }
 
 /* ===== 文档/幻灯片预览 ===== */
@@ -1975,6 +2041,7 @@ button, input, textarea, select {
 
 /* ===== 空状态 ===== */
 .empty-state {
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2284,24 +2351,21 @@ button, input, textarea, select {
   }
 
   /* 自然语言精修输入框 */
-  .natural-language-refine-header,
-  .natural-language-refine-body {
+  .natural-language-refine-input {
     padding: var(--space-2) var(--space-3);
   }
 
   .natural-language-refine-input-wrapper {
-    flex-direction: column;
     gap: var(--space-2);
   }
 
   .natural-language-refine-textarea {
-    width: 100%;
     min-width: 0;
   }
 
   .natural-language-refine-submit {
-    width: 100%;
-    min-width: 0;
+    min-width: 50px;
+    padding: var(--space-1) var(--space-2);
   }
 
   /* 幻灯片 */

@@ -69,40 +69,31 @@ export function NaturalLanguageRefineInput({
 
   return (
     <div className="natural-language-refine-input">
-      <div className="natural-language-refine-header">
-        <div className="section-title-wrap">
-          <h2 className="section-title">自然语言精修</h2>
-          <span className="section-badge">{typeLabel}</span>
-        </div>
+      <div className="natural-language-refine-input-wrapper">
+        <textarea
+          className="natural-language-refine-textarea"
+          placeholder={`输入指令调整${typeLabel}...`}
+          value={instruction}
+          onChange={(e) => setInstruction(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={disabled || isSubmitting}
+          rows={1}
+        />
+        <button
+          className="btn btn-primary natural-language-refine-submit"
+          onClick={handleSubmit}
+          disabled={disabled || isSubmitting || !instruction.trim()}
+          type="button"
+        >
+          {isSubmitting ? '...' : '发送'}
+        </button>
       </div>
-      
-      <div className="natural-language-refine-body">
-        <div className="natural-language-refine-input-wrapper">
-          <textarea
-            className="natural-language-refine-textarea"
-            placeholder={`输入调整指令，例如：更正式、优化讲稿、增加时间线页...`}
-            value={instruction}
-            onChange={(e) => setInstruction(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={disabled || isSubmitting}
-            rows={2}
-          />
-          <button
-            className="btn btn-primary natural-language-refine-submit"
-            onClick={handleSubmit}
-            disabled={disabled || isSubmitting || !instruction.trim()}
-            type="button"
-          >
-            {isSubmitting ? '精修中...' : '精修'}
-          </button>
+
+      {error && (
+        <div className="natural-language-refine-error">
+          {error}
         </div>
-        
-        {error && (
-          <div className="natural-language-refine-error">
-            {error}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   )
 }
