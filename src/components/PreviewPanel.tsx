@@ -210,7 +210,7 @@ export function PreviewPanel({
               <div className="preview-editor-error">{editError}</div>
             )}
             <div className="preview-editor-content">
-              {activeArtifact && editedData && (
+              {activeArtifact != null && editedData != null && (
                 <ArtifactPreview
                   artifact={{ ...activeArtifact, data: editedData }}
                   onOutlineChange={handleOutlineChange}
