@@ -120,7 +120,6 @@ export function useTaskWorkflow() {
 
     isUnmountedRef.current = false
     resolvedRef.current = false
-    setIsInitialLoading(true)
 
     // REST GET 和 SSE 并行发起，谁先到谁先渲染
     void runAction(async () => {
