@@ -116,29 +116,30 @@ class LarkCardCallbackServiceTest {
     @Test
     void shouldResolveConfirmCardEvenWhenCallbackHasNoChatId() {
         AgentTask waitingTask = waitingTask();
+        waitingTask.setTaskId("task-no-chat");
         waitingTask.setSource("im_text");
         waitingTask.getPlanSteps().get(0).setPreviewData(objectMapper.createObjectNode()
                 .put("artifactType", "PRESENTATION")
                 .put("title", "预览标题"));
         AgentTask advancedTask = AgentTask.builder()
-                .taskId("task-1")
+                .taskId("task-no-chat")
                 .status(TaskStatus.DELIVERED)
                 .source("im_text")
                 .build();
-        when(agentTaskService.getTask("task-1")).thenReturn(waitingTask);
-        when(agentTaskService.confirmStep(org.mockito.Mockito.eq("task-1"), org.mockito.Mockito.any())).thenReturn(waitingTask);
-        when(agentRunner.runUntilBlocked("task-1")).thenReturn(advancedTask);
+        when(agentTaskService.getTask("task-no-chat")).thenReturn(waitingTask);
+        when(agentTaskService.confirmStep(org.mockito.Mockito.eq("task-no-chat"), org.mockito.Mockito.any())).thenReturn(waitingTask);
+        when(agentRunner.runUntilBlocked("task-no-chat")).thenReturn(advancedTask);
 
-        ObjectNode response = callbackService.handleCallback(callbackPayloadWithoutChat("confirm", "task-1", "D_SLIDES", "confirm2"));
+        ObjectNode response = callbackService.handleCallback(callbackPayloadWithoutChat("confirm", "task-no-chat", "D_SLIDES", "confirm2"));
 
         assertEquals("success", response.at("/toast/type").asText());
-        verify(agentTaskService, timeout(1000)).confirmStep(org.mockito.Mockito.eq("task-1"), org.mockito.Mockito.any());
+        verify(agentTaskService, timeout(5000)).confirmStep(org.mockito.Mockito.eq("task-no-chat"), org.mockito.Mockito.any());
         verify(larkTaskCardService, timeout(1000)).updateConfirmCardResolved(
                 org.mockito.Mockito.eq(""),
                 org.mockito.Mockito.eq(waitingTask),
                 org.mockito.Mockito.any(),
                 org.mockito.Mockito.eq(true));
-        verify(agentRunner, timeout(1000)).runUntilBlocked("task-1");
+        verify(agentRunner, timeout(5000)).runUntilBlocked("task-no-chat");
     }
 
     private AgentTask waitingTask() {

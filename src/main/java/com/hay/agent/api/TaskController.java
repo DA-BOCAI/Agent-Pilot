@@ -4,6 +4,7 @@ import com.hay.agent.api.dto.ConfirmTaskRequest;
 import com.hay.agent.api.dto.CancelTaskRequest;
 import com.hay.agent.api.dto.CreateTaskRequest;
 import com.hay.agent.api.dto.GenerateStepPreviewRequest;
+import com.hay.agent.api.dto.PatchPreviewTextRequest;
 import com.hay.agent.api.dto.RefineStepPreviewRequest;
 import com.hay.agent.api.dto.TaskCardView;
 import com.hay.agent.api.dto.TaskView;
@@ -18,8 +19,10 @@ import com.hay.agent.service.TaskWorkspaceStreamService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -32,6 +35,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/tasks")
+@Slf4j
 @Tag(name = "任务编排接口", description = "用于任务创建、规划、执行、确认、预览和过程追踪")
 public class TaskController {
 
@@ -121,6 +125,8 @@ public class TaskController {
     public ResponseEntity<TaskView> updateStepPreview(@PathVariable String taskId,
                                                       @PathVariable String stepId,
                                                       @RequestBody UpdateStepPreviewRequest request) {
+        log.warn("收到 Legacy 结构化预览更新请求，前端应改用工作台接口，taskId={}，stepId={}，source={}，clientId={}",
+                taskId, stepId, request == null ? null : request.getSource(), request == null ? null : request.getClientId());
         return ResponseEntity.ok(taskMapper.toView(agentTaskService.updateStepPreview(taskId, stepId, request)));
     }
 
@@ -129,7 +135,20 @@ public class TaskController {
     public ResponseEntity<TaskWorkspaceView> updateStepPreviewFromWorkspace(@PathVariable String taskId,
                                                                             @PathVariable String stepId,
                                                                             @RequestBody UpdateStepPreviewRequest request) {
+        log.info("收到工作台结构化预览更新请求，taskId={}，stepId={}，source={}，clientId={}",
+                taskId, stepId, request == null ? null : request.getSource(), request == null ? null : request.getClientId());
         return ResponseEntity.ok(taskMapper.toWorkspaceView(agentTaskService.updateStepPreview(taskId, stepId, request)));
+    }
+
+    @PatchMapping("/{taskId}/workspace/steps/{stepId}/preview/text")
+    @Operation(summary = "工作台精确修改预览文字", description = "按页码/文本目标修改结构化预览中的单个文字节点，并返回完整工作台快照")
+    public ResponseEntity<TaskWorkspaceView> patchPreviewTextFromWorkspace(@PathVariable String taskId,
+                                                                           @PathVariable String stepId,
+                                                                           @RequestBody PatchPreviewTextRequest request) {
+        log.info("收到工作台精确文字修改请求，taskId={}，stepId={}，target={}，editableTextId={}，source={}，clientId={}",
+                taskId, stepId, request == null ? null : request.getTarget(), request == null ? null : request.getEditableTextId(),
+                request == null ? null : request.getSource(), request == null ? null : request.getClientId());
+        return ResponseEntity.ok(taskMapper.toWorkspaceView(agentTaskService.patchPreviewText(taskId, stepId, request)));
     }
 
     @Deprecated
@@ -138,6 +157,9 @@ public class TaskController {
     public ResponseEntity<TaskView> refineStepPreview(@PathVariable String taskId,
                                                       @PathVariable String stepId,
                                                       @RequestBody RefineStepPreviewRequest request) {
+        log.warn("收到 Legacy 自然语言精修请求，前端应改用工作台接口，taskId={}，stepId={}，source={}，clientId={}，instruction={}",
+                taskId, stepId, request == null ? null : request.getSource(), request == null ? null : request.getClientId(),
+                request == null ? null : abbreviateForLog(request.getInstruction(), 120));
         return ResponseEntity.ok(taskMapper.toView(agentTaskService.refineStepPreview(taskId, stepId, request)));
     }
 
@@ -146,6 +168,9 @@ public class TaskController {
     public ResponseEntity<TaskWorkspaceView> refineStepPreviewFromWorkspace(@PathVariable String taskId,
                                                                             @PathVariable String stepId,
                                                                             @RequestBody RefineStepPreviewRequest request) {
+        log.info("收到工作台自然语言精修请求，taskId={}，stepId={}，source={}，clientId={}，instruction={}",
+                taskId, stepId, request == null ? null : request.getSource(), request == null ? null : request.getClientId(),
+                request == null ? null : abbreviateForLog(request.getInstruction(), 120));
         return ResponseEntity.ok(taskMapper.toWorkspaceView(agentTaskService.refineStepPreview(taskId, stepId, request)));
     }
 
@@ -192,5 +217,12 @@ public class TaskController {
             request.setSource("workspace_legacy_confirm");
         }
         return taskActionCoordinator.confirmFromWorkspace(taskId, request);
+    }
+
+    private String abbreviateForLog(String text, int maxLength) {
+        if (text == null || text.length() <= maxLength) {
+            return text;
+        }
+        return text.substring(0, maxLength) + "...";
     }
 }

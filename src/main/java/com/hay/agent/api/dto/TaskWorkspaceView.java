@@ -27,6 +27,7 @@ public class TaskWorkspaceView {
     Progress progress;
     Confirmation confirmation;
     Preview preview;
+    List<Preview> previews;
     Adjustments adjustments;
     List<Output> outputs;
     List<TimelineEvent> timeline;

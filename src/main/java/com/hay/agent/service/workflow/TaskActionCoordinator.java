@@ -48,8 +48,6 @@ public class TaskActionCoordinator {
                     return waitingTask;
                 }
 
-                larkTaskCardService.updateConfirmCardResolved(chatId, waitingTask, waitingStep.get(), true);
-
                 ConfirmTaskRequest confirmRequest = new ConfirmTaskRequest();
                 confirmRequest.setStepId(stepId);
                 confirmRequest.setApproved(true);
@@ -61,6 +59,7 @@ public class TaskActionCoordinator {
                         : request.getSource());
                 confirmRequest.setClientId(request == null ? null : request.getClientId());
                 agentTaskService.confirmStep(taskId, confirmRequest);
+                larkTaskCardService.updateConfirmCardResolved(chatId, waitingTask, waitingStep.get(), true);
 
                 AgentTask advancedTask = agentRunner.runUntilBlocked(taskId);
                 larkTaskCardService.sendFollowUpCardsForCurrentState(chatId, advancedTask);

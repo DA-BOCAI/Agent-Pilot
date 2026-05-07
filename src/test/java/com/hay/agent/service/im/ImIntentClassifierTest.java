@@ -40,4 +40,14 @@ class ImIntentClassifierTest {
     void shouldAskClarificationForShortImperativeProductRequests() {
         assertEquals(ImIntentType.CLARIFICATION_NEEDED, classifier.classify("帮我做个PPT", false).getType());
     }
+
+    @Test
+    void shouldTreatConversationSummaryAsNewTask() {
+        assertEquals(ImIntentType.NEW_TASK, classifier.classify("用文档来总结一下这次谈话", false).getType());
+    }
+
+    @Test
+    void shouldTreatSoftStopWordsAsCancelTask() {
+        assertEquals(ImIntentType.CANCEL_TASK, classifier.classify("算了，先别做了", true).getType());
+    }
 }

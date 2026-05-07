@@ -195,12 +195,12 @@ public class LarkImEventListener {
                 return;
             }
 
-            if (isDuplicateText(chatId, userId, text)) {
+            ImIntentClassification classification = classifyIntent(chatId, text);
+            if (isDuplicateText(chatId, userId, text) && !isRepeatableOperationalIntent(classification)) {
                 log.info("忽略同一聊天内短时间重复的飞书文本消息，chatId={}，messageId={}", chatId, messageId);
                 return;
             }
 
-            ImIntentClassification classification = classifyIntent(chatId, text);
             if (classification.getType() == ImIntentType.IGNORE
                     && handlePendingClarificationIfNeeded(chatId, chatType, messageId, userId, text)) {
                 return;
@@ -709,6 +709,14 @@ public class LarkImEventListener {
         return processedTextFingerprints.putIfAbsent(fingerprint, Instant.now()) != null;
     }
 
+    private boolean isRepeatableOperationalIntent(ImIntentClassification classification) {
+        if (classification == null || classification.getType() == null) {
+            return false;
+        }
+        return classification.getType() == ImIntentType.PROGRESS_QUERY
+                || classification.getType() == ImIntentType.HELP_QUERY;
+    }
+
     private void cleanupTextFingerprints() {
         Instant expiresBefore = Instant.now().minus(TEXT_DEDUP_TTL);
         Iterator<Map.Entry<String, Instant>> iterator = processedTextFingerprints.entrySet().iterator();
@@ -767,7 +775,8 @@ public class LarkImEventListener {
         return containsAny(normalized,
                 "进度", "状态", "做到哪", "到哪了", "完成了吗", "好了没", "生成了吗", "现在怎么样",
                 "怎么样了", "做完了吗", "出来了吗", "卡住了吗", "还要多久", "多久能好", "有结果了吗",
-                "取消任务", "停止任务", "重试", "再试", "重新跑", "progress", "status", "cancel", "stop", "retry");
+                "取消任务", "停止任务", "不用做了", "先别做了", "别做了", "算了别做了", "停止生成",
+                "重试", "再试", "重新跑", "progress", "status", "cancel", "stop", "retry");
     }
 
     private boolean hasPendingClarification(String chatId, String userId) {

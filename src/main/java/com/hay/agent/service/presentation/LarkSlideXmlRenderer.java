@@ -29,6 +29,7 @@ public class LarkSlideXmlRenderer {
             case METRIC_CARDS -> standardHeader(slide, theme) + metricCards(slide, theme) + footerShape(deckTitle, slide.getSlideNo(), theme);
             case TIMELINE -> standardHeader(slide, theme) + timeline(slide, theme) + footerShape(deckTitle, slide.getSlideNo(), theme);
             case COMPARISON_TABLE -> standardHeader(slide, theme) + comparisonTable(slide, theme) + footerShape(deckTitle, slide.getSlideNo(), theme);
+            case SECTION_DIVIDER -> sectionDividerLayout(slide, deckTitle, theme);
             case TWO_COLUMN -> standardHeader(slide, theme)
                     + (isAgendaTitle(slide.getTitle()) ? agendaLayout(slide, theme) : twoColumnContent(slide, theme))
                     + footerShape(deckTitle, slide.getSlideNo(), theme);
@@ -48,6 +49,9 @@ public class LarkSlideXmlRenderer {
         }
         if (title.contains("致谢") || title.contains("总结") || title.toLowerCase().contains("thanks")) {
             return PresentationLayout.CLOSING;
+        }
+        if (isSectionDividerCandidate(slide)) {
+            return PresentationLayout.SECTION_DIVIDER;
         }
         if (hasTimelineTable(slide)) {
             return PresentationLayout.TIMELINE;
@@ -116,21 +120,26 @@ public class LarkSlideXmlRenderer {
                 .findFirst()
                 .orElse(deckTitle);
         return "<shape type=\"rect\" topLeftX=\"690\" topLeftY=\"0\" width=\"270\" height=\"540\">"
-                + "<fill><fillColor color=\"rgba(255,255,255,0.10)\"/></fill>"
+                + "<fill><fillColor color=\"" + softSurface(theme) + "\"/></fill>"
                 + "</shape>"
-                + "<shape type=\"rect\" topLeftX=\"70\" topLeftY=\"86\" width=\"8\" height=\"300\">"
+                + "<shape type=\"rect\" topLeftX=\"70\" topLeftY=\"82\" width=\"8\" height=\"332\">"
                 + "<fill><fillColor color=\"" + theme.getAccent() + "\"/></fill>"
                 + "</shape>"
-                + "<shape type=\"text\" topLeftX=\"104\" topLeftY=\"88\" width=\"240\" height=\"30\">"
-                + "<content textType=\"caption\" fontSize=\"13\" color=\"" + theme.getAccent() + "\" bold=\"true\"><p>PRESENTATION</p></content></shape>"
-                + "<shape type=\"text\" topLeftX=\"104\" topLeftY=\"126\" width=\"720\" height=\"132\">"
+                + "<shape type=\"rect\" topLeftX=\"104\" topLeftY=\"92\" width=\"86\" height=\"4\">"
+                + "<fill><fillColor color=\"" + theme.getAccent() + "\"/></fill>"
+                + "</shape>"
+                + "<shape type=\"text\" topLeftX=\"104\" topLeftY=\"112\" width=\"300\" height=\"30\">"
+                + "<content textType=\"caption\" fontSize=\"12\" color=\"" + theme.getAccent() + "\" bold=\"true\"><p>DEMO READY DECK</p></content></shape>"
+                + "<shape type=\"text\" topLeftX=\"104\" topLeftY=\"150\" width=\"670\" height=\"122\">"
                 + "<content textType=\"title\" fontSize=\"" + coverTitleFont(deckTitle) + "\" color=\"" + theme.getTitleColor() + "\" bold=\"true\" lineSpacing=\"multiple:1.05\"><p>"
                 + escapeXml(compactForSlide(deckTitle, 30))
                 + "</p></content></shape>"
-                + "<shape type=\"text\" topLeftX=\"108\" topLeftY=\"302\" width=\"610\" height=\"70\">"
-                + "<content textType=\"sub-headline\" fontSize=\"20\" color=\"" + theme.getBodyColor() + "\" lineSpacing=\"multiple:1.15\"><p>"
+                + "<shape type=\"text\" topLeftX=\"108\" topLeftY=\"310\" width=\"590\" height=\"72\">"
+                + "<content textType=\"sub-headline\" fontSize=\"19\" color=\"" + theme.getBodyColor() + "\" lineSpacing=\"multiple:1.16\"><p>"
                 + escapeXml(compactForSlide(subtitle, 52))
                 + "</p></content></shape>"
+                + "<shape type=\"text\" topLeftX=\"732\" topLeftY=\"392\" width=\"150\" height=\"44\">"
+                + "<content textType=\"caption\" fontSize=\"13\" color=\"" + theme.getBodyColor() + "\" textAlign=\"right\"><p>IM to Doc and Slides</p></content></shape>"
                 + footerShape(deckTitle, slide.getSlideNo(), theme);
     }
 
@@ -140,16 +149,46 @@ public class LarkSlideXmlRenderer {
                 .filter(text -> !text.isBlank())
                 .findFirst()
                 .orElse("感谢聆听");
-        return "<shape type=\"text\" topLeftX=\"100\" topLeftY=\"162\" width=\"760\" height=\"96\">"
-                + "<content textType=\"title\" fontSize=\"40\" color=\"" + theme.getTitleColor() + "\" bold=\"true\" textAlign=\"center\"><p>"
-                + escapeXml(compactForSlide(slide.getTitle(), 22))
-                + "</p></content></shape>"
-                + "<shape type=\"rect\" topLeftX=\"360\" topLeftY=\"286\" width=\"240\" height=\"5\">"
+        return "<shape type=\"rect\" topLeftX=\"72\" topLeftY=\"104\" width=\"86\" height=\"4\">"
                 + "<fill><fillColor color=\"" + theme.getAccent() + "\"/></fill>"
                 + "</shape>"
-                + "<shape type=\"text\" topLeftX=\"140\" topLeftY=\"326\" width=\"680\" height=\"82\">"
-                + "<content textType=\"body\" fontSize=\"18\" color=\"" + theme.getBodyColor() + "\" textAlign=\"center\" lineSpacing=\"multiple:1.2\"><p>"
+                + "<shape type=\"text\" topLeftX=\"72\" topLeftY=\"148\" width=\"650\" height=\"92\">"
+                + "<content textType=\"title\" fontSize=\"42\" color=\"" + theme.getTitleColor() + "\" bold=\"true\" lineSpacing=\"multiple:1.05\"><p>"
+                + escapeXml(compactForSlide(slide.getTitle(), 22))
+                + "</p></content></shape>"
+                + "<shape type=\"text\" topLeftX=\"76\" topLeftY=\"282\" width=\"620\" height=\"86\">"
+                + "<content textType=\"body\" fontSize=\"18\" color=\"" + theme.getBodyColor() + "\" lineSpacing=\"multiple:1.2\"><p>"
                 + escapeXml(compactForSlide(body, 58))
+                + "</p></content></shape>"
+                + "<shape type=\"rect\" topLeftX=\"724\" topLeftY=\"118\" width=\"96\" height=\"260\">"
+                + "<fill><fillColor color=\"" + softSurface(theme) + "\"/></fill>"
+                + "<border color=\"" + softBorder(theme) + "\" width=\"1\"/>"
+                + "</shape>"
+                + "<shape type=\"rect\" topLeftX=\"820\" topLeftY=\"118\" width=\"44\" height=\"260\">"
+                + "<fill><fillColor color=\"" + theme.getAccent() + "\"/></fill>"
+                + "</shape>"
+                + footerShape(deckTitle, slide.getSlideNo(), theme);
+    }
+
+    private String sectionDividerLayout(PresentationSlide slide, String deckTitle, PresentationTheme theme) {
+        String kicker = firstBullet(slide).isBlank() ? "NEXT SECTION" : compactForSlide(firstBullet(slide), 38);
+        return "<shape type=\"rect\" topLeftX=\"0\" topLeftY=\"0\" width=\"250\" height=\"540\">"
+                + "<fill><fillColor color=\"" + softSurface(theme) + "\"/></fill>"
+                + "</shape>"
+                + "<shape type=\"text\" topLeftX=\"78\" topLeftY=\"138\" width=\"92\" height=\"52\">"
+                + "<content textType=\"headline\" fontSize=\"32\" color=\"" + theme.getAccent() + "\" bold=\"true\"><p>"
+                + String.format("%02d", Math.max(1, slide.getSlideNo()))
+                + "</p></content></shape>"
+                + "<shape type=\"rect\" topLeftX=\"78\" topLeftY=\"206\" width=\"96\" height=\"4\">"
+                + "<fill><fillColor color=\"" + theme.getAccent() + "\"/></fill>"
+                + "</shape>"
+                + "<shape type=\"text\" topLeftX=\"302\" topLeftY=\"154\" width=\"560\" height=\"118\">"
+                + "<content textType=\"title\" fontSize=\"40\" color=\"" + theme.getTitleColor() + "\" bold=\"true\" lineSpacing=\"multiple:1.05\"><p>"
+                + escapeXml(compactForSlide(slide.getTitle(), 24))
+                + "</p></content></shape>"
+                + "<shape type=\"text\" topLeftX=\"306\" topLeftY=\"304\" width=\"510\" height=\"58\">"
+                + "<content textType=\"caption\" fontSize=\"16\" color=\"" + theme.getBodyColor() + "\" lineSpacing=\"multiple:1.15\"><p>"
+                + escapeXml(kicker)
                 + "</p></content></shape>"
                 + footerShape(deckTitle, slide.getSlideNo(), theme);
     }
@@ -159,7 +198,7 @@ public class LarkSlideXmlRenderer {
     }
 
     private String accentBar(PresentationTheme theme) {
-        return "<shape type=\"rect\" topLeftX=\"0\" topLeftY=\"0\" width=\"960\" height=\"10\">"
+        return "<shape type=\"rect\" topLeftX=\"0\" topLeftY=\"0\" width=\"960\" height=\"6\">"
                 + "<fill><fillColor color=\"" + theme.getAccent() + "\"/></fill>"
                 + "</shape>"
                 + "<shape type=\"rect\" topLeftX=\"80\" topLeftY=\"142\" width=\"90\" height=\"4\">"
@@ -168,9 +207,9 @@ public class LarkSlideXmlRenderer {
     }
 
     private String titleShape(String title, PresentationTheme theme) {
-        String safeTitle = compactForSlide(title, 34);
-        int fontSize = safeTitle.length() > 24 ? 26 : safeTitle.length() > 16 ? 30 : 34;
-        return "<shape type=\"text\" topLeftX=\"80\" topLeftY=\"38\" width=\"800\" height=\"96\">"
+        String safeTitle = compactForSlide(title, 38);
+        int fontSize = safeTitle.length() > 30 ? 22 : safeTitle.length() > 22 ? 26 : safeTitle.length() > 14 ? 30 : 34;
+        return "<shape type=\"text\" topLeftX=\"80\" topLeftY=\"38\" width=\"800\" height=\"88\">"
                 + "<content textType=\"title\" fontSize=\"" + fontSize + "\" color=\"" + theme.getTitleColor() + "\" bold=\"true\" lineSpacing=\"multiple:1.05\">"
                 + "<p>" + escapeXml(safeTitle) + "</p>"
                 + "</content></shape>";
@@ -199,8 +238,8 @@ public class LarkSlideXmlRenderer {
         if (content.isEmpty()) {
             content.append("<p></p>");
         }
-        return "<shape type=\"text\" topLeftX=\"90\" topLeftY=\"190\" width=\"780\" height=\"285\">"
-                + "<content textType=\"body\" fontSize=\"16\" color=\"" + theme.getBodyColor() + "\" lineSpacing=\"multiple:1.35\">"
+        return "<shape type=\"text\" topLeftX=\"96\" topLeftY=\"186\" width=\"760\" height=\"288\">"
+                + "<content textType=\"body\" fontSize=\"15\" color=\"" + theme.getBodyColor() + "\" lineSpacing=\"multiple:1.32\">"
                 + content
                 + "</content></shape>";
     }
@@ -237,39 +276,36 @@ public class LarkSlideXmlRenderer {
     private String insightCards(List<String> bullets, PresentationTheme theme) {
         StringBuilder cards = new StringBuilder();
         int count = Math.min(4, bullets.size());
-        boolean twoByTwo = count >= 3;
-        int cardWidth = twoByTwo ? 356 : 780;
-        int cardHeight = twoByTwo ? 106 : 72;
-        int startX = 90;
-        int startY = 188;
-        int gapX = 38;
-        int gapY = 22;
+        boolean grid = count >= 3;
+        int startY = grid ? 184 : 190;
         for (int i = 0; i < count; i++) {
-            int row = twoByTwo ? i / 2 : i;
-            int col = twoByTwo ? i % 2 : 0;
-            int x = startX + col * (cardWidth + gapX);
-            int y = startY + row * (cardHeight + gapY);
+            int row = grid ? i / 2 : i;
+            int col = grid ? i % 2 : 0;
+            int x = grid ? (col == 0 ? 92 : 506) : 104;
+            int y = grid ? startY + row * 142 : startY + row * 104;
+            int ruleWidth = grid ? 326 : 704;
+            int bodyX = grid ? x + 68 : x + 92;
+            int bodyWidth = grid ? 278 : 612;
+            int bodyHeight = grid ? 76 : 70;
             String index = String.format("%02d", i + 1);
-            cards.append("<shape type=\"rect\" topLeftX=\"").append(x).append("\" topLeftY=\"").append(y)
-                    .append("\" width=\"").append(cardWidth).append("\" height=\"").append(cardHeight).append("\">")
-                    .append("<fill><fillColor color=\"rgba(255,255,255,0.18)\"/></fill>")
-                    .append("<border color=\"").append(theme.getAccent()).append("\" width=\"1\"/>")
-                    .append("</shape>")
-                    .append("<shape type=\"rect\" topLeftX=\"").append(x).append("\" topLeftY=\"").append(y)
-                    .append("\" width=\"7\" height=\"").append(cardHeight).append("\">")
+            cards.append("<line startX=\"").append(x).append("\" startY=\"").append(y + 96)
+                    .append("\" endX=\"").append(x + ruleWidth).append("\" endY=\"").append(y + 96)
+                    .append("\"><border color=\"").append(softBorder(theme)).append("\" width=\"1\"/></line>")
+                    .append("<shape type=\"rect\" topLeftX=\"").append(x).append("\" topLeftY=\"").append(y + 46)
+                    .append("\" width=\"44\" height=\"3\">")
                     .append("<fill><fillColor color=\"").append(theme.getAccent()).append("\"/></fill>")
                     .append("</shape>")
-                    .append("<shape type=\"text\" topLeftX=\"").append(x + 24).append("\" topLeftY=\"").append(y + 18)
+                    .append("<shape type=\"text\" topLeftX=\"").append(x).append("\" topLeftY=\"").append(y)
                     .append("\" width=\"54\" height=\"30\">")
-                    .append("<content textType=\"caption\" fontSize=\"17\" color=\"").append(theme.getAccent())
+                    .append("<content textType=\"headline\" fontSize=\"24\" color=\"").append(theme.getAccent())
                     .append("\" bold=\"true\"><p>")
                     .append(index)
                     .append("</p></content></shape>")
-                    .append("<shape type=\"text\" topLeftX=\"").append(x + 84).append("\" topLeftY=\"").append(y + 18)
-                    .append("\" width=\"").append(cardWidth - 110).append("\" height=\"").append(cardHeight - 28).append("\">")
-                    .append("<content textType=\"body\" fontSize=\"15\" color=\"").append(theme.getBodyColor())
-                    .append("\" lineSpacing=\"multiple:1.18\"><p>")
-                    .append(escapeXml(compactForSlide(bullets.get(i), twoByTwo ? 42 : 64)))
+                    .append("<shape type=\"text\" topLeftX=\"").append(bodyX).append("\" topLeftY=\"").append(y + 2)
+                    .append("\" width=\"").append(bodyWidth).append("\" height=\"").append(bodyHeight).append("\">")
+                    .append("<content textType=\"body\" fontSize=\"").append(grid ? 14 : 16).append("\" color=\"").append(theme.getBodyColor())
+                    .append("\" lineSpacing=\"multiple:1.16\"><p>")
+                    .append(escapeXml(compactForSlide(bullets.get(i), grid ? 36 : 58)))
                     .append("</p></content></shape>");
         }
         return cards.toString();
@@ -355,30 +391,30 @@ public class LarkSlideXmlRenderer {
         }
 
         StringBuilder cards = new StringBuilder();
-        int cardWidth = items.size() <= 3 ? 250 : 244;
-        int gap = 24;
+        int cardWidth = 236;
+        int gap = 30;
         for (int i = 0; i < items.size(); i++) {
             int row = i / 3;
             int col = i % 3;
             int x = 90 + col * (cardWidth + gap);
-            int y = 190 + row * 132;
+            int y = 182 + row * 124;
             MetricText metric = splitMetricText(items.get(i));
             cards.append("<shape type=\"rect\" topLeftX=\"").append(x).append("\" topLeftY=\"").append(y)
-                    .append("\" width=\"").append(cardWidth).append("\" height=\"96\">")
-                    .append("<fill><fillColor color=\"rgba(255,255,255,0.16)\"/></fill>")
-                    .append("<border color=\"").append(theme.getAccent()).append("\" width=\"1\"/>")
+                    .append("\" width=\"").append(cardWidth).append("\" height=\"104\">")
+                    .append("<fill><fillColor color=\"").append(softSurface(theme)).append("\"/></fill>")
+                    .append("<border color=\"").append(softBorder(theme)).append("\" width=\"1\"/>")
                     .append("</shape>")
                     .append("<shape type=\"text\" topLeftX=\"").append(x + 18).append("\" topLeftY=\"").append(y + 18)
-                    .append("\" width=\"").append(cardWidth - 36).append("\" height=\"34\">")
-                    .append("<content textType=\"headline\" fontSize=\"").append(metric.metric() ? 28 : 20)
+                    .append("\" width=\"").append(cardWidth - 36).append("\" height=\"32\">")
+                    .append("<content textType=\"headline\" fontSize=\"").append(metric.metric() ? 25 : 18)
                     .append("\" color=\"").append(theme.getTitleColor())
                     .append("\" bold=\"true\"><p>")
                     .append(escapeXml(metric.value()))
                     .append("</p></content></shape>")
                     .append("<shape type=\"text\" topLeftX=\"").append(x + 18).append("\" topLeftY=\"").append(y + 58)
-                    .append("\" width=\"").append(cardWidth - 36).append("\" height=\"28\">")
-                    .append("<content textType=\"caption\" fontSize=\"12\" color=\"").append(theme.getBodyColor())
-                    .append("\" lineSpacing=\"multiple:1.1\"><p>")
+                    .append("\" width=\"").append(cardWidth - 36).append("\" height=\"34\">")
+                    .append("<content textType=\"caption\" fontSize=\"11\" color=\"").append(theme.getBodyColor())
+                    .append("\" lineSpacing=\"multiple:1.08\"><p>")
                     .append(escapeXml(metric.label()))
                     .append("</p></content></shape>");
         }
@@ -462,7 +498,7 @@ public class LarkSlideXmlRenderer {
         int x = 80;
         int y = 182;
         int width = 800;
-        int rowHeight = 52;
+        int rowHeight = rows.size() > 5 ? 44 : 52;
         int columnCount = Math.max(1, rows.get(0).size());
         int columnWidth = width / columnCount;
         for (int r = 0; r < rows.size() && r < 6; r++) {
@@ -472,16 +508,16 @@ public class LarkSlideXmlRenderer {
                 String text = c < row.size() ? cleanText(row.get(c)) : "";
                 int cellX = x + c * columnWidth;
                 int cellY = y + r * rowHeight;
-                String fill = header ? theme.getAccent() : "rgba(255,255,255,0.14)";
+                String fill = header ? theme.getAccent() : softSurface(theme);
                 String color = header ? theme.getBackgroundSafeTextColor() : theme.getBodyColor();
                 table.append("<shape type=\"rect\" topLeftX=\"").append(cellX).append("\" topLeftY=\"").append(cellY)
                         .append("\" width=\"").append(columnWidth).append("\" height=\"").append(rowHeight).append("\">")
                         .append("<fill><fillColor color=\"").append(fill).append("\"/></fill>")
-                        .append("<border color=\"").append(theme.getAccent()).append("\" width=\"1\"/>")
+                        .append("<border color=\"").append(softBorder(theme)).append("\" width=\"1\"/>")
                         .append("</shape>")
                         .append("<shape type=\"text\" topLeftX=\"").append(cellX + 12).append("\" topLeftY=\"").append(cellY + 10)
                         .append("\" width=\"").append(columnWidth - 24).append("\" height=\"").append(rowHeight - 16).append("\">")
-                        .append("<content textType=\"body\" fontSize=\"").append(header ? 14 : 12).append("\" color=\"")
+                        .append("<content textType=\"body\" fontSize=\"").append(header ? 13 : 11).append("\" color=\"")
                         .append(color).append("\" bold=\"").append(header).append("\" lineSpacing=\"multiple:1.1\"><p>")
                         .append(escapeXml(compactForSlide(text, columnCount >= 3 ? 20 : 30)))
                         .append("</p></content></shape>");
@@ -531,6 +567,25 @@ public class LarkSlideXmlRenderer {
         return bullets;
     }
 
+    private String firstBullet(PresentationSlide slide) {
+        List<String> bullets = allBullets(slide == null ? null : slide.getBlocks());
+        return bullets.isEmpty() ? "" : bullets.get(0);
+    }
+
+    private boolean isSectionDividerCandidate(PresentationSlide slide) {
+        if (slide == null || slide.getBlocks() == null || slide.getBlocks().isEmpty()) {
+            return true;
+        }
+        if (hasTimelineTable(slide) || hasComparisonTable(slide) || hasMetricBullets(slide)) {
+            return false;
+        }
+        List<String> bullets = allBullets(slide.getBlocks());
+        long textBlocks = slide.getBlocks().stream()
+                .filter(block -> block.getText() != null && !block.getText().isBlank())
+                .count();
+        return bullets.size() <= 1 && textBlocks <= 1 && cleanText(slide.getTitle()).length() <= 18;
+    }
+
     private int coverTitleFont(String deckTitle) {
         int length = deckTitle == null ? 0 : deckTitle.length();
         if (length > 24) {
@@ -547,6 +602,24 @@ public class LarkSlideXmlRenderer {
                 + "<content textType=\"caption\" fontSize=\"12\" color=\"" + theme.getCaptionColor() + "\">"
                 + "<p>" + escapeXml(compactForSlide(deckTitle, 28)) + " | 第" + slideNo + "页</p>"
                 + "</content></shape>";
+    }
+
+    private String softSurface(PresentationTheme theme) {
+        return switch (theme) {
+            case BUSINESS -> "rgba(15,118,110,0.08)";
+            case MINIMAL -> "rgba(79,70,229,0.07)";
+            case TECH -> "rgba(255,255,255,0.10)";
+            case CAMPAIGN -> "rgba(255,255,255,0.11)";
+        };
+    }
+
+    private String softBorder(PresentationTheme theme) {
+        return switch (theme) {
+            case BUSINESS -> "rgba(15,118,110,0.30)";
+            case MINIMAL -> "rgba(79,70,229,0.24)";
+            case TECH -> "rgba(45,212,191,0.34)";
+            case CAMPAIGN -> "rgba(244,114,92,0.38)";
+        };
     }
 
     private boolean isAgendaTitle(String title) {

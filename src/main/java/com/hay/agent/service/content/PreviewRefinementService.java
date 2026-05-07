@@ -2,6 +2,7 @@ package com.hay.agent.service.content;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -65,11 +66,7 @@ public class PreviewRefinementService {
                 return Optional.empty();
             }
 
-            JsonNode refined = objectMapper.readTree(extractJson(content));
-            if (!refined.isObject()) {
-                return Optional.empty();
-            }
-            return Optional.of(refined);
+            return parseAndApplyRefinement(currentPreviewData, content, expectedArtifactType);
         } catch (RestClientException e) {
             log.warn("大模型预览精修请求失败，降级为规则精修：{}", e.getMessage());
             return Optional.empty();
@@ -87,26 +84,30 @@ public class PreviewRefinementService {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("model", modelName);
         root.put("temperature", temperature);
+        root.put("max_tokens", 2048);
 
         var messages = root.putArray("messages");
         messages.addObject()
                 .put("role", "system")
                 .put("content", """
-                        你负责精修办公 Agent 的结构化 previewData JSON。
-                        必须只返回一个合法 JSON 对象，不要返回 Markdown 代码块、解释或额外文字。
-                        除非用户明确要求修改，否则必须保持原有字段和结构不变。
-                        返回结果中的 artifactType 必须等于期望的产物类型。
+                        你负责精修办公 Agent 的结构化 previewData。
+                        只返回一个合法 JSON 对象，不要返回 Markdown 代码块、解释或额外文字。
 
-                        当 previewData 是 PRESENTATION 时：
-                        - 可以修改 title、theme、pageCount、estimatedDurationMinutes、slides、rehearsalTips、reviewChecklist、每页标题、bodyMarkdown、bullets、speakerNotes 和 blocks。
-                        - 支持的主题值只能是 business、tech、campaign、minimal。
-                        - 优先做局部修改，不要无故重写整份演示文稿。
-                        - 如果用户要求删除、调整顺序或新增页面，必须同步更新 slides 和 pageCount。
-                        - 如果用户要求优化讲稿、排练、演讲口径或备注，优先修改 speakerNotes、rehearsalTips 和 reviewChecklist。
+                        重要：不要返回完整 previewData。只返回局部 patch，后端会把 patch 合并回当前 previewData。
+                        返回对象必须包含 artifactType，且 artifactType 必须等于期望的产物类型。
 
-                        当 previewData 是 DOCUMENT 时：
+                        PRESENTATION patch 规则：
+                        - 可以修改 title、theme、pageCount、estimatedDurationMinutes、rehearsalTips、reviewChecklist。
+                        - 修改页面时，slides 只放发生变化的页面对象，不要返回全部 slides。
+                        - slides 中每个对象必须带 slideNo，例如：
+                          {"artifactType":"PRESENTATION","slides":[{"slideNo":5,"title":"新标题","bullets":["新的要点"]}]}
+                        - 支持的 theme 只能是 business、tech、campaign、minimal。
+                        - 优先做局部修改，不要无故重写整份演示稿。
+                        - 如果用户要求优化讲稿、排练或备注，优先修改 speakerNotes、rehearsalTips 和 reviewChecklist。
+
+                        DOCUMENT patch 规则：
                         - 可以修改 title、rawMarkdown、outline、sections 和 warnings。
-                        - 除非用户要求大范围重写，否则应保持文档结构稳定。
+                        - 除非用户要求大范围重写，否则保持文档结构稳定。
                         """);
         messages.addObject()
                 .put("role", "user")
@@ -114,6 +115,100 @@ public class PreviewRefinementService {
                         + "\n用户精修指令：" + instruction
                         + "\n当前 previewData JSON：\n" + currentPreviewData.toString());
         return root;
+    }
+
+    Optional<JsonNode> parseAndApplyRefinement(JsonNode currentPreviewData, String content, String expectedArtifactType) {
+        try {
+            JsonNode patch = objectMapper.readTree(extractJson(content));
+            if (!patch.isObject()) {
+                return Optional.empty();
+            }
+            ObjectNode merged = currentPreviewData != null && currentPreviewData.isObject()
+                    ? currentPreviewData.deepCopy()
+                    : objectMapper.createObjectNode();
+            applyPatchObject(merged, (ObjectNode) patch);
+            merged.put("artifactType", expectedArtifactType);
+            return Optional.of(merged);
+        } catch (Exception e) {
+            log.warn("大模型预览精修 JSON patch 解析失败，降级为规则精修：{}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private void applyPatchObject(ObjectNode target, ObjectNode patch) {
+        patch.fields().forEachRemaining(entry -> {
+            String field = entry.getKey();
+            JsonNode value = entry.getValue();
+            if ("artifactType".equals(field)) {
+                return;
+            }
+            if ("slides".equals(field) && value.isArray() && target.path("slides").isArray()) {
+                applySlidesPatch((ArrayNode) target.path("slides"), (ArrayNode) value);
+                return;
+            }
+            mergeField(target, field, value);
+        });
+    }
+
+    private void applySlidesPatch(ArrayNode currentSlides, ArrayNode patchSlides) {
+        boolean allAddressed = true;
+        for (JsonNode slidePatch : patchSlides) {
+            if (!slidePatch.isObject() || resolveSlideIndex(slidePatch) < 0) {
+                allAddressed = false;
+                break;
+            }
+        }
+        if (!allAddressed) {
+            currentSlides.removeAll();
+            patchSlides.forEach(node -> currentSlides.add(node.deepCopy()));
+            return;
+        }
+
+        for (JsonNode slidePatchNode : patchSlides) {
+            ObjectNode slidePatch = (ObjectNode) slidePatchNode;
+            int slideIndex = resolveSlideIndex(slidePatch);
+            while (slideIndex >= currentSlides.size()) {
+                ObjectNode created = objectMapper.createObjectNode();
+                created.put("slideNo", currentSlides.size() + 1);
+                currentSlides.add(created);
+            }
+            JsonNode currentSlide = currentSlides.get(slideIndex);
+            if (currentSlide instanceof ObjectNode currentSlideObject) {
+                slidePatch.fields().forEachRemaining(entry -> {
+                    String field = entry.getKey();
+                    if ("slideNo".equals(field) || "pageIndex".equals(field) || "index".equals(field)) {
+                        return;
+                    }
+                    mergeField(currentSlideObject, field, entry.getValue());
+                });
+            } else {
+                currentSlides.set(slideIndex, slidePatch.deepCopy());
+            }
+        }
+    }
+
+    private int resolveSlideIndex(JsonNode slidePatch) {
+        int slideNo = slidePatch.path("slideNo").asInt(0);
+        if (slideNo <= 0) {
+            slideNo = slidePatch.path("pageIndex").asInt(0);
+        }
+        if (slideNo <= 0 && slidePatch.has("index")) {
+            slideNo = slidePatch.path("index").asInt(-1) + 1;
+        }
+        return slideNo <= 0 ? -1 : slideNo - 1;
+    }
+
+    private void mergeField(ObjectNode target, String field, JsonNode value) {
+        if (value == null || value.isNull()) {
+            target.remove(field);
+            return;
+        }
+        JsonNode current = target.get(field);
+        if (current instanceof ObjectNode currentObject && value instanceof ObjectNode patchObject) {
+            applyPatchObject(currentObject, patchObject);
+            return;
+        }
+        target.set(field, value.deepCopy());
     }
 
     private String extractJson(String content) {

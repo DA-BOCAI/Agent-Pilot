@@ -7,6 +7,7 @@ public enum PresentationLayout {
     METRIC_CARDS("metric_cards"),
     TIMELINE("timeline"),
     COMPARISON_TABLE("comparison_table"),
+    SECTION_DIVIDER("section_divider"),
     CLOSING("closing");
 
     private final String code;

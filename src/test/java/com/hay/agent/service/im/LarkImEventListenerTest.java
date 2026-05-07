@@ -204,6 +204,29 @@ class LarkImEventListenerTest {
     }
 
     @Test
+    void shouldAllowGroupSoftCancelWithoutMentionWhenTaskExists() {
+        AgentTask cancelledTask = AgentTask.builder()
+                .taskId("task-1")
+                .status(TaskStatus.FAILED)
+                .build();
+        lenient().when(agentTaskService.cancelTask(
+                        org.mockito.Mockito.eq("task-1"),
+                        org.mockito.Mockito.contains("IM 消息取消"),
+                        org.mockito.Mockito.eq("im"),
+                        org.mockito.Mockito.eq("msg_29b")))
+                .thenReturn(cancelledTask);
+
+        listener.handleEvent(event("om_28b", "group", "msg_28b", "@_user_1 请帮我生成一份项目推进文档", true));
+        listener.handleEvent(event("om_29b", "group", "msg_29b", "算了，先别做了", false));
+
+        verify(agentTaskService, timeout(1000)).cancelTask(
+                org.mockito.Mockito.eq("task-1"),
+                org.mockito.Mockito.contains("IM 消息取消"),
+                org.mockito.Mockito.eq("im"),
+                org.mockito.Mockito.eq("msg_29b"));
+    }
+
+    @Test
     void shouldReplyHelpQueryWithoutCreatingTask() {
         listener.handleEvent(event("om_22", "p2p", "msg_22", "你能做什么，怎么用？", false));
 
@@ -229,6 +252,16 @@ class LarkImEventListenerTest {
         verify(agentTaskService, never()).createTask(any());
         verify(agentRunner, never()).runUntilBlocked(any());
         org.junit.jupiter.api.Assertions.assertTrue(listener.buildClarificationReply("帮我做个PPT").contains("主题或项目名称"));
+    }
+
+    @Test
+    void shouldCreateTaskForBroadConversationSummaryWhenMentioned() {
+        listener.handleEvent(event("om_23b", "group", "msg_23b", "@_user_1 用文档来总结一下这次谈话", true));
+
+        ArgumentCaptor<CreateTaskRequest> captor = ArgumentCaptor.forClass(CreateTaskRequest.class);
+        verify(agentTaskService, timeout(1000)).createTask(captor.capture());
+        org.junit.jupiter.api.Assertions.assertTrue(captor.getValue().getInputText().contains("用文档来总结一下这次谈话"));
+        assertEquals("msg_23b", captor.getValue().getRequestId());
     }
 
     @Test
@@ -313,7 +346,7 @@ class LarkImEventListenerTest {
 
         String reply = listener.buildProgressReply(workspace);
 
-        org.junit.jupiter.api.Assertions.assertTrue(reply.contains("当前任务进度：60%"));
+        org.junit.jupiter.api.Assertions.assertTrue(reply.contains("当前任务进度：75%"));
         org.junit.jupiter.api.Assertions.assertTrue(reply.contains("等待确认：confirm2"));
         org.junit.jupiter.api.Assertions.assertTrue(reply.contains("预览：已生成"));
         org.junit.jupiter.api.Assertions.assertTrue(reply.contains("工作台：https://agent-pilot-nine.vercel.app?taskId=task-1"));

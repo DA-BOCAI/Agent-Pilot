@@ -125,6 +125,10 @@ class LarkTaskCardServiceTest {
 
         assertTrue(card.path("_template_id").isMissingNode());
         assertEquals("任务已完成~", card.at("/header/title/content").asText());
+        assertTrue(card.toString().contains("闭环结果"));
+        assertTrue(card.toString().contains("IM"));
+        assertTrue(card.toString().contains("PPT"));
+        assertTrue(card.toString().contains("演示亮点"));
         assertTrue(card.toString().contains("https://example.feishu.cn/slides/abc"));
         assertNoVisibleEscapes(card);
     }

@@ -3,6 +3,7 @@ package com.hay.agent.service;
 import com.hay.agent.api.dto.ConfirmTaskRequest;
 import com.hay.agent.api.dto.CreateTaskRequest;
 import com.hay.agent.api.dto.GenerateStepPreviewRequest;
+import com.hay.agent.api.dto.PatchPreviewTextRequest;
 import com.hay.agent.api.dto.RefineStepPreviewRequest;
 import com.hay.agent.api.dto.UpdateStepPreviewRequest;
 import com.hay.agent.api.dto.preview.DocumentPreviewResponse;
@@ -134,6 +135,9 @@ class AgentTaskServiceTest {
         assertEquals(1, task.getArtifacts().size());
         assertEquals("slides-preview", task.getArtifacts().get(0).getType());
         assertEquals("campaign", task.getArtifacts().get(0).getPreviewData().path("theme").asText());
+        List<String> eventTypes = task.getEvents().stream().map(event -> event.getType()).toList();
+        assertTrue(eventTypes.contains("STEP_PREVIEW_GENERATING"));
+        assertEquals("STEP_PREVIEW_READY", task.getEvents().get(task.getEvents().size() - 1).getType());
     }
 
     @Test
@@ -233,6 +237,71 @@ class AgentTaskServiceTest {
         String taskId = task.getTaskId();
         assertThrows(org.springframework.web.server.ResponseStatusException.class,
                 () -> agentTaskService.updateStepPreview(taskId, "D_SLIDES", updateRequest));
+    }
+
+    @Test
+    void shouldPatchSlidesPreviewTextPrecisely() {
+        when(planner.plan(anyString())).thenReturn(List.of(
+                PlanStep.builder().stepId("D_SLIDES").scene("D").action("生成演示文稿").tool("lark-slides").requiresConfirm(true).status(StepStatus.PENDING).build()
+        ));
+        when(contentPreviewService.previewPresentation(any())).thenReturn(PresentationPreviewResponse.builder()
+                .artifactType("PRESENTATION")
+                .title("校招宣讲")
+                .theme("business")
+                .pageCount(1)
+                .slides(List.of(PresentationPreviewResponse.Slide.builder()
+                        .id("slide-1")
+                        .slideNo(1)
+                        .title("原始标题")
+                        .layout("content")
+                        .bullets(List.of("原始要点"))
+                        .blocks(List.of(PresentationPreviewResponse.Block.builder()
+                                .type("bullets")
+                                .items(List.of("原始要点"))
+                                .build()))
+                        .build()))
+                .warnings(List.of())
+                .build());
+
+        CreateTaskRequest create = new CreateTaskRequest();
+        create.setInputText("生成校招宣讲PPT");
+        create.setUserId("u-test-patch");
+        create.setRequestId("req-test-patch");
+
+        AgentTask task = agentTaskService.createTask(create);
+        task = agentTaskService.planTask(task.getTaskId());
+        task = agentTaskService.generateStepPreview(task.getTaskId(), "D_SLIDES", new GenerateStepPreviewRequest());
+
+        PatchPreviewTextRequest titlePatch = new PatchPreviewTextRequest();
+        titlePatch.setSlideNo(1);
+        titlePatch.setTarget("title");
+        titlePatch.setValue("我们和广工有5年深度合作");
+        titlePatch.setSource("workspace");
+        titlePatch.setClientId("desktop-web");
+        task = agentTaskService.patchPreviewText(task.getTaskId(), "D_SLIDES", titlePatch);
+
+        PatchPreviewTextRequest itemPatch = new PatchPreviewTextRequest();
+        itemPatch.setEditableTextId("D_SLIDES:s0:blockItem:0:0");
+        itemPatch.setValue("共建智能制造联合实验室，每年投入200万以上研发经费");
+        itemPatch.setSource("workspace");
+        task = agentTaskService.patchPreviewText(task.getTaskId(), "D_SLIDES", itemPatch);
+
+        ObjectNode previewData = (ObjectNode) task.getPlanSteps().get(0).getPreviewData();
+        assertEquals("我们和广工有5年深度合作", previewData.at("/slides/0/title").asText());
+        assertEquals("共建智能制造联合实验室，每年投入200万以上研发经费",
+                previewData.at("/slides/0/blocks/0/items/0").asText());
+        assertEquals(previewData.at("/slides/0/blocks/0/items/0").asText(),
+                previewData.at("/slides/0/bullets/0").asText());
+        assertTrue(previewData.at("/slides/0/bodyMarkdown").asText()
+                .contains(previewData.at("/slides/0/blocks/0/items/0").asText()));
+        assertEquals(3, previewData.path("revision").asInt());
+        assertEquals("text_patch", previewData.path("lastEditType").asText());
+        assertEquals("STEP_PREVIEW_TEXT_PATCHED", task.getEvents().get(task.getEvents().size() - 1).getType());
+        assertEquals("workspace", task.getEvents().get(task.getEvents().size() - 1).getMetadata().get("source"));
+        assertEquals("共建智能制造联合实验室，每年投入200万以上研发经费",
+                task.getArtifacts().get(0).getPreviewData().at("/slides/0/blocks/0/items/0").asText());
+        assertEquals(task.getArtifacts().get(0).getPreviewData().at("/slides/0/blocks/0/items/0").asText(),
+                task.getArtifacts().get(0).getPreviewData().at("/slides/0/bullets/0").asText());
     }
 
     @Test

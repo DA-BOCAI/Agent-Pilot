@@ -63,7 +63,7 @@ class TaskMapperTest {
 
         assertTrue(workspace.getPreview().isAvailable());
         assertEquals("slides", workspace.getPreview().getType());
-        assertEquals(60, workspace.getProgress().getPercent());
+        assertEquals(75, workspace.getProgress().getPercent());
         assertEquals("confirm2", workspace.getProgress().getPhase());
         assertEquals("confirm2", workspace.getSteps().get(0).getPhase());
         assertEquals("预览待确认", workspace.getSteps().get(0).getDisplayStatus());
@@ -82,12 +82,62 @@ class TaskMapperTest {
         assertEquals("/api/v1/tasks/task-1/workspace", workspace.getSync().getSnapshotEndpoint());
         assertEquals("/api/v1/tasks/task-1/workspace/stream", workspace.getSync().getStreamEndpoint());
         assertEquals("backend_authoritative", workspace.getDiagnostics().getProgressSource());
-        assertEquals(60, workspace.getDiagnostics().getProgressPercent());
+        assertEquals(75, workspace.getDiagnostics().getProgressPercent());
         assertEquals("confirm2", workspace.getDiagnostics().getProgressPhase());
         assertEquals(1, workspace.getDiagnostics().getHiddenInternalArtifactCount());
         assertEquals(1, workspace.getDiagnostics().getPreviewWarningCount());
         assertEquals(12, workspace.getDiagnostics().getSlidePageCount());
         assertTrue(workspace.getDiagnostics().isShouldUseBackendProgress());
+    }
+
+    @Test
+    void shouldPreferNextActionPreviewWhenMultipleStepsAreWaitingConfirm() {
+        var docPreview = objectMapper.createObjectNode();
+        docPreview.put("artifactType", "DOCUMENT");
+        docPreview.put("title", "文档预览");
+        docPreview.put("rawMarkdown", "# 文档预览");
+
+        var slidesPreview = objectMapper.createObjectNode();
+        slidesPreview.put("artifactType", "PRESENTATION");
+        slidesPreview.put("title", "PPT预览");
+        slidesPreview.put("theme", "business");
+        var slide = slidesPreview.putArray("slides").addObject();
+        slide.put("slideNo", 1);
+        slide.put("title", "第一页");
+
+        AgentTask task = AgentTask.builder()
+                .taskId("task-active-preview")
+                .inputText("生成文档和PPT")
+                .status(TaskStatus.WAIT_CONFIRM)
+                .nextAction("confirm:D_SLIDES")
+                .updatedAt(Instant.now())
+                .planSteps(List.of(
+                        PlanStep.builder()
+                                .stepId("C_DOC")
+                                .action("生成文档")
+                                .status(StepStatus.WAIT_CONFIRM)
+                                .requiresConfirm(true)
+                                .previewData(docPreview)
+                                .build(),
+                        PlanStep.builder()
+                                .stepId("D_SLIDES")
+                                .action("生成PPT")
+                                .status(StepStatus.WAIT_CONFIRM)
+                                .requiresConfirm(true)
+                                .previewData(slidesPreview)
+                                .build()
+                ))
+                .artifacts(List.of())
+                .events(List.of())
+                .build();
+
+        TaskWorkspaceView workspace = taskMapper.toWorkspaceView(task);
+
+        assertEquals("D_SLIDES", workspace.getPreview().getStepId());
+        assertEquals("slides", workspace.getPreview().getType());
+        assertEquals("D_SLIDES", workspace.getConfirmation().getStepId());
+        assertEquals("D_SLIDES", workspace.getAdjustments().getStepId());
+        assertTrue(workspace.getPreview().getData().at("/slides/0/titleEditableTextId").asText().startsWith("D_SLIDES:s0:title"));
     }
 
     @Test
@@ -113,6 +163,36 @@ class TaskMapperTest {
 
         assertEquals("帮我们生成一份校招宣讲PPT", workspace.getTitle());
         assertEquals("帮我们生成一份校招宣讲PPT", workspace.getInputSummary());
+    }
+
+    @Test
+    void shouldKeepWorkspaceTitleFromUserInputWhenTaskIsOnlyPlanned() {
+        AgentTask task = AgentTask.builder()
+                .taskId("task-title-planned")
+                .inputText("帮我们生成一份校招宣讲PPT")
+                .status(TaskStatus.PLANNED)
+                .nextAction("execute")
+                .updatedAt(Instant.now())
+                .planSteps(List.of(
+                        PlanStep.builder()
+                                .stepId("A_CAPTURE")
+                                .action("接收并标准化用户意图")
+                                .status(StepStatus.PENDING)
+                                .requiresConfirm(false)
+                                .build(),
+                        PlanStep.builder()
+                                .stepId("C_DOC")
+                                .action("基于用户需求生成校招宣讲方案文档")
+                                .status(StepStatus.PENDING)
+                                .requiresConfirm(true)
+                                .build()))
+                .build();
+
+        TaskWorkspaceView workspace = taskMapper.toWorkspaceView(task);
+
+        assertEquals("帮我们生成一份校招宣讲PPT", workspace.getTitle());
+        assertEquals("理解需求", workspace.getSteps().get(0).getName());
+        assertEquals("接收并标准化用户意图", workspace.getSteps().get(0).getAction());
     }
 
     @Test
@@ -196,13 +276,17 @@ class TaskMapperTest {
         task.setNextAction("confirm:D_SLIDES");
         TaskWorkspaceView confirm2 = taskMapper.toWorkspaceView(task);
 
-        assertEquals(40, confirm1.getProgress().getPercent());
+        assertEquals(25, confirm1.getProgress().getPercent());
         assertEquals("confirm1", confirm1.getProgress().getPhase());
         assertEquals(50, previewGenerating.getProgress().getPercent());
         assertEquals("preview_generating", previewGenerating.getProgress().getPhase());
-        assertEquals("需求已确认，生成预览中", previewGenerating.getSteps().get(0).getDisplayStatus());
-        assertEquals(60, confirm2.getProgress().getPercent());
+        assertEquals("生成预览中", previewGenerating.getProgress().getLabel());
+        assertEquals("生成预览中", previewGenerating.getDisplayStatus());
+        assertEquals("预览生成中", previewGenerating.getSteps().get(0).getDisplayStatus());
+        assertEquals(75, confirm2.getProgress().getPercent());
         assertEquals("confirm2", confirm2.getProgress().getPhase());
+        assertEquals("确认预览内容", confirm2.getProgress().getLabel());
+        assertEquals("确认预览内容", confirm2.getDisplayStatus());
         assertEquals("预览待确认", confirm2.getSteps().get(0).getDisplayStatus());
     }
 
@@ -241,8 +325,10 @@ class TaskMapperTest {
         TaskWorkspaceView workspace = taskMapper.toWorkspaceView(task);
 
         assertEquals("confirm1", workspace.getProgress().getPhase());
-        assertEquals(70, workspace.getProgress().getPercent());
-        assertEquals("后续产物需求待确认", workspace.getProgress().getLabel());
+        assertEquals(63, workspace.getProgress().getPercent());
+        assertEquals("确认后续产物需求", workspace.getProgress().getLabel());
+        assertEquals("确认后续产物需求", workspace.getDisplayStatus());
+        assertEquals("后续需求待确认", workspace.getSteps().get(1).getDisplayStatus());
     }
 
     @Test
@@ -281,8 +367,83 @@ class TaskMapperTest {
         TaskWorkspaceView workspace = taskMapper.toWorkspaceView(task);
 
         assertEquals("confirm2", workspace.getProgress().getPhase());
-        assertEquals(85, workspace.getProgress().getPercent());
-        assertEquals("后续预览待确认", workspace.getProgress().getLabel());
+        assertEquals(88, workspace.getProgress().getPercent());
+        assertEquals("确认后续预览内容", workspace.getProgress().getLabel());
+        assertEquals("确认后续预览内容", workspace.getDisplayStatus());
+        assertEquals("后续预览待确认", workspace.getSteps().get(1).getDisplayStatus());
+    }
+
+    @Test
+    void shouldKeepLatestSlidesPreviewAfterSlidesConfirm2IsApproved() {
+        var docPreviewData = objectMapper.createObjectNode()
+                .put("artifactType", "DOCUMENT")
+                .put("title", "方案文档");
+        var slidesPreviewData = objectMapper.createObjectNode()
+                .put("artifactType", "PRESENTATION")
+                .put("title", "方案PPT")
+                .put("theme", "business")
+                .put("pageCount", 8);
+        var previewSlide = slidesPreviewData.putArray("slides").addObject();
+        previewSlide.put("id", "slide-1");
+        previewSlide.put("title", "封面");
+        previewSlide.putArray("bullets").add("核心要点");
+        previewSlide.putArray("blocks").addObject()
+                .put("type", "bullets")
+                .putArray("items").add("结构化要点");
+
+        PlanStep docStep = PlanStep.builder()
+                .stepId("C_DOC")
+                .action("创建方案文档")
+                .status(StepStatus.DONE)
+                .requiresConfirm(true)
+                .previewData(docPreviewData)
+                .build();
+        PlanStep slidesStep = PlanStep.builder()
+                .stepId("D_SLIDES")
+                .action("基于文档创建 PPT")
+                .status(StepStatus.APPROVED)
+                .requiresConfirm(true)
+                .previewData(slidesPreviewData)
+                .build();
+        AgentTask task = AgentTask.builder()
+                .taskId("task-latest-preview")
+                .inputText("生成方案文档和PPT")
+                .status(TaskStatus.PLANNED)
+                .nextAction("execute")
+                .updatedAt(Instant.now())
+                .planSteps(List.of(docStep, slidesStep))
+                .artifacts(List.of(
+                        Artifact.builder()
+                                .type("docs-preview")
+                                .stepId("C_DOC")
+                                .title("方案文档")
+                                .url("preview://task-latest-preview/C_DOC")
+                                .previewData(docPreviewData)
+                                .build(),
+                        Artifact.builder()
+                                .type("slides-preview")
+                                .stepId("D_SLIDES")
+                                .title("方案PPT")
+                                .url("preview://task-latest-preview/D_SLIDES")
+                                .previewData(slidesPreviewData)
+                                .build()))
+                .build();
+
+        TaskWorkspaceView workspace = taskMapper.toWorkspaceView(task);
+
+        assertTrue(workspace.getPreview().isAvailable());
+        assertEquals("slides", workspace.getPreview().getType());
+        assertEquals("D_SLIDES", workspace.getPreview().getStepId());
+        assertEquals("方案PPT", workspace.getPreview().getTitle());
+        assertEquals(2, workspace.getPreviews().size());
+        assertEquals("doc", workspace.getPreviews().get(0).getType());
+        assertEquals("C_DOC", workspace.getPreviews().get(0).getStepId());
+        assertEquals("slides", workspace.getPreviews().get(1).getType());
+        assertEquals("D_SLIDES", workspace.getPreviews().get(1).getStepId());
+        assertEquals("D_SLIDES:s0:title", workspace.getPreview().getData().at("/slides/0/titleEditableTextId").asText());
+        assertEquals("D_SLIDES:s0:bullet:0", workspace.getPreview().getData().at("/slides/0/bulletsEditableTextIds/0").asText());
+        assertEquals("D_SLIDES:s0:blockItem:0:0", workspace.getPreview().getData().at("/slides/0/blocks/0/itemsEditableTextIds/0").asText());
+        assertEquals(8, workspace.getDiagnostics().getSlidePageCount());
     }
 
     @Test
@@ -318,6 +479,38 @@ class TaskMapperTest {
         assertEquals(1, workspace.getOutputs().size());
         assertEquals("doc", workspace.getOutputs().get(0).getType());
         assertEquals("C_DOC", workspace.getOutputs().get(0).getStepId());
+    }
+
+    @Test
+    void shouldExposeShortWorkspaceStepNamesAndKeepFullActions() {
+        String longDocAction = "基于用户已确认的校招宣讲需求创建飞书文档，沉淀岗位亮点、培养机制、招聘流程与风险答疑";
+        String longSlidesAction = "基于前序文档生成适合现场汇报的飞书演示文稿，并整理讲稿提示和排练建议";
+        AgentTask task = AgentTask.builder()
+                .taskId("task-step-name")
+                .inputText("生成校招宣讲材料")
+                .status(TaskStatus.PLANNED)
+                .updatedAt(Instant.now())
+                .planSteps(List.of(
+                        PlanStep.builder()
+                                .stepId("C_DOC")
+                                .action(longDocAction)
+                                .status(StepStatus.PENDING)
+                                .requiresConfirm(true)
+                                .build(),
+                        PlanStep.builder()
+                                .stepId("D_SLIDES")
+                                .action(longSlidesAction)
+                                .status(StepStatus.PENDING)
+                                .requiresConfirm(true)
+                                .build()))
+                .build();
+
+        TaskWorkspaceView workspace = taskMapper.toWorkspaceView(task);
+
+        assertEquals("生成文档", workspace.getSteps().get(0).getName());
+        assertEquals(longDocAction, workspace.getSteps().get(0).getAction());
+        assertEquals("生成PPT", workspace.getSteps().get(1).getName());
+        assertEquals(longSlidesAction, workspace.getSteps().get(1).getAction());
     }
 
     @Test

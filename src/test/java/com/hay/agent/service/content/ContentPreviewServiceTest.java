@@ -47,6 +47,37 @@ class ContentPreviewServiceTest {
         org.junit.jupiter.api.Assertions.assertTrue(response.getSlides().get(0).getSpeakerNotes().contains("第1页"));
     }
 
+    @Test
+    void previewPresentationShouldAddRecruitingChecklist() {
+        ContentGeneratorService contentGeneratorService = mock(ContentGeneratorService.class);
+        when(contentGeneratorService.generatePptContent("生成校招宣讲PPT", "校园招聘"))
+                .thenReturn("""
+                        # 2024 校园招聘宣讲
+
+                        ## 岗位介绍
+                        - 技术研发岗
+                        - 产品经理岗
+                        - 运营支持岗
+                        """);
+        ContentPreviewService service = new ContentPreviewService(
+                contentGeneratorService,
+                new MarkdownPreviewParser(),
+                new PresentationMarkdownParser(),
+                new PresentationDesignAdvisor()
+        );
+
+        PresentationPreviewResponse response = service.previewPresentation(PresentationPreviewRequest.builder()
+                .userInput("生成校招宣讲PPT")
+                .topic("校园招聘")
+                .theme("business")
+                .build());
+
+        org.junit.jupiter.api.Assertions.assertTrue(response.getSlides().stream()
+                .anyMatch(slide -> "为什么值得加入".equals(slide.getTitle())));
+        org.junit.jupiter.api.Assertions.assertTrue(response.getReviewChecklist().stream()
+                .anyMatch(item -> item.contains("岗位亮点") && item.contains("投递动作")));
+    }
+
     private String markdownSlides(int count) {
         StringBuilder markdown = new StringBuilder("# 产品发布会\n\n");
         for (int i = 1; i <= count; i++) {

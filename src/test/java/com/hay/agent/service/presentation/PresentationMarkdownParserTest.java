@@ -59,8 +59,8 @@ class PresentationMarkdownParserTest {
 
         assertTrue(xml.startsWith("<slide xmlns=\"http://www.larkoffice.com/sml/2.0\">"));
         assertTrue(xml.contains(PresentationTheme.CAMPAIGN.getBackground()));
-        assertTrue(xml.contains("rgba(255,255,255,0.16)"));
-        assertTrue(xml.contains("topLeftY=\"190\""));
+        assertTrue(xml.contains("rgba(255,255,255,0.11)"));
+        assertTrue(xml.contains("topLeftY=\"182\""));
         assertTrue(xml.contains("3亿"));
         assertTrue(xml.contains("GMV破"));
         assertTrue(!xml.contains("<ul>"));
@@ -84,9 +84,32 @@ class PresentationMarkdownParserTest {
 
         assertTrue(xml.contains("01"));
         assertTrue(xml.contains("02"));
-        assertTrue(xml.contains("rgba(255,255,255,0.18)"));
-        assertTrue(!xml.contains("<border color=\"rgba"));
+        assertTrue(xml.contains("textType=\"headline\" fontSize=\"24\""));
+        assertTrue(xml.contains("<line startX=\"92\""));
+        assertTrue(xml.contains("width=\"44\" height=\"3\""));
         assertTrue(xml.contains("工作台负责预览精修"));
+        assertTrue(!xml.contains("<ul>"));
+    }
+
+    @Test
+    void rendererShouldUseEditorialSectionDividerForSparseChapterSlides() {
+        LarkSlideXmlRenderer renderer = new LarkSlideXmlRenderer();
+        PresentationSlide slide = PresentationSlide.builder()
+                .slideNo(4)
+                .title("Execution")
+                .layout("section_divider")
+                .blocks(List.of(PresentationSlide.SlideBlock.builder()
+                        .type("bullets")
+                        .items(List.of("From plan to delivery"))
+                        .rows(List.of())
+                        .build()))
+                .build();
+
+        String xml = renderer.render(slide, "Agent Copilot", PresentationTheme.BUSINESS);
+
+        assertTrue(xml.contains("Execution"));
+        assertTrue(xml.contains("From plan to delivery"));
+        assertTrue(xml.contains("topLeftX=\"302\" topLeftY=\"154\""));
         assertTrue(!xml.contains("<ul>"));
     }
 
@@ -139,6 +162,7 @@ class PresentationMarkdownParserTest {
                         .build()));
 
         assertEquals("two_column", slides.get(1).getLayout());
+        assertTrue(slides.get(1).getBlocks().get(0).getItems().size() <= 6);
         assertTrue(slides.get(1).getBlocks().get(0).getItems().get(0).length() <= 34);
     }
 
@@ -156,6 +180,18 @@ class PresentationMarkdownParserTest {
         assertEquals("核心结论", slides.get(2).getTitle());
         assertEquals("下一步行动计划", slides.get(slides.size() - 2).getTitle());
         assertEquals("closing", slides.get(slides.size() - 1).getLayout());
+    }
+
+    @Test
+    void advisorShouldKeepTitleOnlySlidesAsSectionDividers() {
+        PresentationDesignAdvisor advisor = new PresentationDesignAdvisor();
+        PresentationSlide slide = PresentationSlide.builder()
+                .slideNo(2)
+                .title("Execution")
+                .blocks(List.of())
+                .build();
+
+        assertEquals(PresentationLayout.SECTION_DIVIDER, advisor.resolveLayout(slide, 1, 3));
     }
 
     @Test
@@ -225,6 +261,83 @@ class PresentationMarkdownParserTest {
         assertTrue(slides.stream().anyMatch(slide -> "timeline".equals(slide.getLayout())));
         assertTrue(slides.stream().anyMatch(slide -> "comparison_table".equals(slide.getLayout())));
         assertEquals("closing", slides.get(slides.size() - 1).getLayout());
+    }
+
+    @Test
+    void advisorShouldAddRecruitingStorylineForCampusDecks() {
+        PresentationDesignAdvisor advisor = new PresentationDesignAdvisor();
+        List<PresentationSlide> slides = advisor.polish(List.of(
+                PresentationSlide.builder()
+                        .slideNo(1)
+                        .title("2024 校园招聘宣讲")
+                        .blocks(List.of(PresentationSlide.SlideBlock.builder()
+                                .type("bullets")
+                                .items(List.of("面向应届毕业生开放技术研发、产品和运营岗位"))
+                                .rows(List.of())
+                                .build()))
+                        .build(),
+                PresentationSlide.builder()
+                        .slideNo(2)
+                        .title("岗位介绍")
+                        .blocks(List.of(PresentationSlide.SlideBlock.builder()
+                                .type("bullets")
+                                .items(List.of("技术研发岗", "产品经理岗", "运营支持岗"))
+                                .rows(List.of())
+                                .build()))
+                        .build()
+        ));
+
+        assertTrue(slides.stream().anyMatch(slide -> "为什么值得加入".equals(slide.getTitle())));
+        assertTrue(slides.stream().anyMatch(slide -> "成长路径与投递行动".equals(slide.getTitle())
+                && "timeline".equals(slide.getLayout())));
+        PresentationSlide valueSlide = slides.stream()
+                .filter(slide -> "为什么值得加入".equals(slide.getTitle()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("content", valueSlide.getLayout());
+        assertTrue(valueSlide.getBlocks().get(0).getItems().stream().anyMatch(item -> item.contains("导师带教")));
+    }
+
+    @Test
+    void advisorShouldSplitDenseBulletSlidesBeforeRendering() {
+        PresentationDesignAdvisor advisor = new PresentationDesignAdvisor();
+        List<PresentationSlide> slides = advisor.polish(List.of(
+                PresentationSlide.builder()
+                        .slideNo(1)
+                        .title("Project cover")
+                        .blocks(List.of())
+                        .build(),
+                PresentationSlide.builder()
+                        .slideNo(2)
+                        .title("Dense signal")
+                        .blocks(List.of(PresentationSlide.SlideBlock.builder()
+                                .type("bullets")
+                                .items(List.of(
+                                        "Align IM entry, workspace preview and final delivery into one repeatable demo path",
+                                        "Keep task cards readable by removing noisy identifiers and highlighting the next decision",
+                                        "Improve PPT pages with stronger narrative structure, speaker notes and rehearsal checklist",
+                                        "Make refine actions traceable from both workspace and IM entry points",
+                                        "Return clear IM notices when the model is rate limited or temporarily unavailable",
+                                        "Preserve both document and presentation artifacts in the delivery preview area",
+                                        "Support progress queries repeatedly without treating them as duplicate task creation"))
+                                .rows(List.of())
+                                .build()))
+                        .build(),
+                PresentationSlide.builder()
+                        .slideNo(3)
+                        .title("Thanks")
+                        .layout("closing")
+                        .blocks(List.of())
+                        .build()
+        ));
+
+        List<PresentationSlide> denseSlides = slides.stream()
+                .filter(slide -> slide.getTitle().startsWith("Dense signal"))
+                .toList();
+
+        assertTrue(denseSlides.size() >= 2);
+        assertTrue(denseSlides.stream().allMatch(slide -> "content".equals(slide.getLayout())));
+        assertTrue(denseSlides.stream().allMatch(slide -> slide.getBlocks().get(0).getItems().size() <= 4));
     }
 
     @Test

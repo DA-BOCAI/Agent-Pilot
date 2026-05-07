@@ -161,13 +161,30 @@ public class ContentPreviewService {
         boolean hasMetrics = slides != null && slides.stream().anyMatch(slide -> "metric_cards".equals(slide.getLayout()));
         boolean hasRiskOrComparison = slides != null && slides.stream().anyMatch(slide -> "comparison_table".equals(slide.getLayout()));
         boolean hasClosing = slides != null && slides.stream().anyMatch(slide -> "closing".equals(slide.getLayout()));
+        boolean recruiting = looksLikeRecruitingDeck(slides);
         List<String> checklist = new java.util.ArrayList<>();
         checklist.add("确认封面标题、汇报对象和场景一致。");
+        if (recruiting) {
+            checklist.add("确认候选人能看清岗位亮点、成长路径、投递动作和雇主价值。");
+        }
         checklist.add(hasMetrics ? "核对关键数字、口径和来源，避免指标页空泛。" : "如涉及业务结果，建议补充关键数字或量化口径。");
         checklist.add(hasRiskOrComparison ? "检查风险、对比或应对动作是否具体到可执行层面。" : "如涉及方案取舍，建议补充风险、对比或应对动作。");
         checklist.add(hasTimeline ? "检查时间线节点是否能支撑行动计划。" : "如有项目推进内容，建议补充时间线或阶段安排。");
         checklist.add(hasClosing ? "确认结尾页包含明确下一步行动。" : "建议保留结尾页，收束结论和下一步行动。");
         return checklist;
+    }
+
+    private boolean looksLikeRecruitingDeck(List<PresentationSlide> slides) {
+        if (slides == null || slides.isEmpty()) {
+            return false;
+        }
+        String joined = slides.stream()
+                .map(slide -> slide.getTitle() + " " + slide.getBlocks().stream()
+                        .map(block -> (block.getText() == null ? "" : block.getText()) + " "
+                                + (block.getItems() == null ? "" : String.join(" ", block.getItems())))
+                        .reduce("", (left, right) -> left + " " + right))
+                .reduce("", (left, right) -> left + " " + right);
+        return containsAny(joined, "校招", "招聘", "宣讲", "岗位", "应聘", "简历", "投递", "实习", "转正", "毕业生");
     }
 
     private boolean containsAny(String text, String... keywords) {

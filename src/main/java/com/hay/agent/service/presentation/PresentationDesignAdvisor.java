@@ -14,6 +14,9 @@ public class PresentationDesignAdvisor {
     private static final int MIN_REPORT_SLIDES = 7;
     private static final int MAX_BULLETS_PER_BLOCK = 6;
     private static final int MAX_BULLET_CHARS = 42;
+    private static final int SPLIT_BULLET_THRESHOLD = 6;
+    private static final int MAX_SAFE_BULLETS_PER_SLIDE = 4;
+    private static final int MAX_SAFE_BULLET_CHARS_PER_SLIDE = 150;
 
     public List<PresentationSlide> polish(List<PresentationSlide> slides) {
         if (slides == null || slides.isEmpty()) {
@@ -22,6 +25,7 @@ public class PresentationDesignAdvisor {
 
         List<PresentationSlide> normalized = normalizeSlides(slides);
         List<PresentationSlide> structuredSlides = ensureNarrativeStructure(normalized);
+        structuredSlides = splitDensitySafeSlides(structuredSlides);
         List<PresentationSlide> polished = new ArrayList<>();
         for (int i = 0; i < structuredSlides.size(); i++) {
             PresentationSlide slide = structuredSlides.get(i);
@@ -91,6 +95,7 @@ public class PresentationDesignAdvisor {
 
     private List<PresentationSlide> ensureNarrativeStructure(List<PresentationSlide> slides) {
         List<PresentationSlide> result = expandSparseDeck(slides);
+        result = ensureRecruitingStructure(result);
         if (result.size() >= 4 && !hasTitleLike(result, "目录", "议程", "大纲")) {
             result.add(Math.min(1, result.size()), agendaSlide(result));
         }
@@ -104,6 +109,118 @@ public class PresentationDesignAdvisor {
         }
         if (result.size() >= 4 && !hasClosing(result)) {
             result.add(closingSlide(result));
+        }
+        return result;
+    }
+
+    private List<PresentationSlide> splitDensitySafeSlides(List<PresentationSlide> slides) {
+        if (slides == null || slides.isEmpty()) {
+            return List.of();
+        }
+        List<PresentationSlide> result = new ArrayList<>();
+        for (int i = 0; i < slides.size(); i++) {
+            PresentationSlide slide = slides.get(i);
+            if (!shouldSplitSlide(slide, i, slides.size())) {
+                result.add(slide);
+                continue;
+            }
+            List<List<String>> chunks = chunkBullets(allBullets(slide));
+            for (int chunkIndex = 0; chunkIndex < chunks.size(); chunkIndex++) {
+                result.add(PresentationSlide.builder()
+                        .title(chunkIndex == 0 ? slide.getTitle() : continuationTitle(slide.getTitle()))
+                        .layout(PresentationLayout.CONTENT.getCode())
+                        .blocks(List.of(PresentationSlide.SlideBlock.builder()
+                                .type("bullets")
+                                .items(chunks.get(chunkIndex))
+                                .rows(List.of())
+                                .build()))
+                        .build());
+            }
+        }
+        return result;
+    }
+
+    private boolean shouldSplitSlide(PresentationSlide slide, int index, int totalSlides) {
+        if (slide == null || slide.getBlocks() == null || slide.getBlocks().isEmpty()) {
+            return false;
+        }
+        if (index == 0 || index == totalSlides - 1 || hasAnyTable(slide)) {
+            return false;
+        }
+        String title = slide.getTitle() == null ? "" : slide.getTitle();
+        if (containsAny(title, "鐩綍", "璁▼", "澶х翰", "agenda", "contents")) {
+            return false;
+        }
+        PresentationLayout explicit = PresentationLayout.fromCode(slide.getLayout());
+        if (explicit == PresentationLayout.COVER
+                || explicit == PresentationLayout.CLOSING
+                || explicit == PresentationLayout.TIMELINE
+                || explicit == PresentationLayout.COMPARISON_TABLE
+                || explicit == PresentationLayout.SECTION_DIVIDER) {
+            return false;
+        }
+        List<String> bullets = allBullets(slide);
+        if (bullets.size() <= SPLIT_BULLET_THRESHOLD) {
+            return false;
+        }
+        return slide.getBlocks().stream()
+                .allMatch(block -> "bullets".equals(block.getType())
+                        || block.getText() == null
+                        || block.getText().isBlank());
+    }
+
+    private List<List<String>> chunkBullets(List<String> bullets) {
+        List<List<String>> chunks = new ArrayList<>();
+        List<String> current = new ArrayList<>();
+        int currentChars = 0;
+        for (String bullet : bullets) {
+            String item = compactText(bullet);
+            if (!current.isEmpty()
+                    && (current.size() >= MAX_SAFE_BULLETS_PER_SLIDE
+                    || currentChars + item.length() > MAX_SAFE_BULLET_CHARS_PER_SLIDE)) {
+                chunks.add(current);
+                current = new ArrayList<>();
+                currentChars = 0;
+            }
+            current.add(item);
+            currentChars += item.length();
+        }
+        if (!current.isEmpty()) {
+            chunks.add(current);
+        }
+        return chunks;
+    }
+
+    private boolean hasAnyTable(PresentationSlide slide) {
+        return slide.getBlocks().stream()
+                .anyMatch(block -> "table".equals(block.getType()) && block.getRows() != null && !block.getRows().isEmpty());
+    }
+
+    private String continuationTitle(String title) {
+        String base = cleanText(title, "More details");
+        return base.endsWith("(cont.)") ? base : base + " (cont.)";
+    }
+
+    private List<PresentationSlide> ensureRecruitingStructure(List<PresentationSlide> slides) {
+        if (!looksLikeRecruitingDeck(slides)) {
+            return slides;
+        }
+        List<PresentationSlide> result = new ArrayList<>(slides);
+        int insertIndex = Math.min(3, Math.max(1, result.size()));
+        if (!hasTitleLike(result, "为什么加入", "岗位亮点", "选择我们", "雇主")) {
+            result.add(insertIndex++, simpleBullets("为什么值得加入", List.of(
+                    "真实业务场景：从校招第一天接触可落地的项目与客户问题",
+                    "成长路径清晰：导师带教、阶段复盘和岗位能力模型同步推进",
+                    "本地支持稳定：校企合作、实习转正和长期发展路径更容易衔接"
+            )));
+        }
+        if (!hasTitleLike(result, "成长路径", "培养机制", "投递", "校招流程")) {
+            result.add(Math.min(insertIndex, result.size()), simpleTable("成长路径与投递行动", List.of(
+                    List.of("阶段", "时间", "行动"),
+                    List.of("了解岗位", "宣讲现场", "关注岗位职责、培养机制和业务方向"),
+                    List.of("投递沟通", "宣讲后", "扫码投递并补充项目经历、实习经历或作品"),
+                    List.of("面试准备", "后续通知", "围绕岗位能力准备案例，主动说明个人优势")
+            )));
         }
         return result;
     }
@@ -281,6 +398,13 @@ public class PresentationDesignAdvisor {
         return containsAny(joined, "项目", "推进", "计划", "落地", "风险", "复盘", "方案", "策略");
     }
 
+    private boolean looksLikeRecruitingDeck(List<PresentationSlide> slides) {
+        String joined = slides.stream()
+                .map(slide -> (slide.getTitle() == null ? "" : slide.getTitle()) + " " + blockText(slide.getBlocks()))
+                .reduce("", (left, right) -> left + " " + right);
+        return containsAny(joined, "校招", "招聘", "宣讲", "岗位", "应聘", "简历", "投递", "实习", "转正", "毕业生");
+    }
+
     private boolean hasClosing(List<PresentationSlide> slides) {
         return hasTitleLike(slides, "总结", "致谢", "结尾", "thanks");
     }
@@ -332,6 +456,9 @@ public class PresentationDesignAdvisor {
         }
         if (title.contains("目录") || title.contains("议程") || title.contains("大纲")) {
             return PresentationLayout.TWO_COLUMN;
+        }
+        if (looksLikeSectionDivider(slide)) {
+            return PresentationLayout.SECTION_DIVIDER;
         }
         if (looksLikeRiskSlide(slide)) {
             return PresentationLayout.COMPARISON_TABLE;
@@ -519,6 +646,19 @@ public class PresentationDesignAdvisor {
         return containsAny(title, "计划", "路径", "里程碑", "下一步", "推进", "行动")
                 && !hasTimelineTable(slide)
                 && bulletCount(slide) >= 2;
+    }
+
+    private boolean looksLikeSectionDivider(PresentationSlide slide) {
+        if (slide == null || slide.getBlocks() == null || slide.getBlocks().isEmpty()) {
+            return true;
+        }
+        if (hasTimelineTable(slide) || hasComparisonTable(slide) || hasMetricBullets(slide)) {
+            return false;
+        }
+        long textBlocks = slide.getBlocks().stream()
+                .filter(block -> block.getText() != null && !block.getText().isBlank())
+                .count();
+        return bulletCount(slide) <= 1 && textBlocks <= 1 && cleanText(slide.getTitle(), "").length() <= 18;
     }
 
     private boolean hasTimelineTable(PresentationSlide slide) {

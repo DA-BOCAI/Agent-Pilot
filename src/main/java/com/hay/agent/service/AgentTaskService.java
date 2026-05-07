@@ -3,9 +3,11 @@ package com.hay.agent.service;
 import com.hay.agent.api.dto.ConfirmTaskRequest;
 import com.hay.agent.api.dto.CreateTaskRequest;
 import com.hay.agent.api.dto.GenerateStepPreviewRequest;
+import com.hay.agent.api.dto.PatchPreviewTextRequest;
 import com.hay.agent.api.dto.RefineStepPreviewRequest;
 import com.hay.agent.api.dto.UpdateStepPreviewRequest;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.hay.agent.domain.AgentTask;
 import com.hay.agent.domain.Artifact;
@@ -225,7 +227,7 @@ public class AgentTaskService {
         return cancelTask(taskId, reason, "lark_card", "");
     }
 
-    public AgentTask cancelTask(String taskId, String reason, String source, String clientId) {
+    public synchronized AgentTask cancelTask(String taskId, String reason, String source, String clientId) {
         AgentTask task = getTask(taskId);
         if (task.getStatus() == TaskStatus.DELIVERED || task.getStatus() == TaskStatus.FAILED) {
             return task;
@@ -248,7 +250,7 @@ public class AgentTaskService {
     /**
      * 为指定步骤生成预览产物。用于 confirm1 之后、正式创建飞书产物之前的 confirm2。
      */
-    public AgentTask generateStepPreview(String taskId, String stepId, GenerateStepPreviewRequest request) {
+    public synchronized AgentTask generateStepPreview(String taskId, String stepId, GenerateStepPreviewRequest request) {
         AgentTask task = getTask(taskId);
         PlanStep step = task.getPlanSteps().stream()
                 .filter(s -> s.getStepId().equals(stepId))
@@ -258,6 +260,7 @@ public class AgentTaskService {
         StepPreviewGenerator generator = findPreviewGenerator(step);
 
         try {
+            markPreviewGenerationStarted(task, step, generator);
             Object preview = generator.generate(task, step, request);
             JsonNode previewData = objectMapper.valueToTree(preview);
             if (previewData instanceof ObjectNode previewObject) {
@@ -283,10 +286,21 @@ public class AgentTaskService {
         }
     }
 
+    private void markPreviewGenerationStarted(AgentTask task,
+                                              PlanStep step,
+                                              StepPreviewGenerator generator) {
+        step.setStatus(StepStatus.RUNNING);
+        task.setStatus(TaskStatus.RUNNING);
+        task.setNextAction("generate-preview:" + step.getStepId());
+        addEvent(task, "STEP_PREVIEW_GENERATING", "步骤预览正在生成",
+                previewActionMetadata(task, step, generator.previewArtifactType(), "workspace", null, null));
+        save(task);
+    }
+
     /**
      * 保存卡片2/详情页编辑后的结构化预览数据，供 confirm2 后的正式创建复用。
      */
-    public AgentTask updateStepPreview(String taskId, String stepId, UpdateStepPreviewRequest request) {
+    public synchronized AgentTask updateStepPreview(String taskId, String stepId, UpdateStepPreviewRequest request) {
         AgentTask task = getTask(taskId);
         PlanStep step = task.getPlanSteps().stream()
                 .filter(s -> s.getStepId().equals(stepId))
@@ -314,10 +328,54 @@ public class AgentTaskService {
     }
 
     /**
+     * 精确修改预览中的单个文字节点，适配前端点击预览画面后做原位文字编辑。
+     */
+    public synchronized AgentTask patchPreviewText(String taskId, String stepId, PatchPreviewTextRequest request) {
+        AgentTask task = getTask(taskId);
+        PlanStep step = task.getPlanSteps().stream()
+                .filter(s -> s.getStepId().equals(stepId))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Step not found"));
+        StepPreviewGenerator generator = findPreviewGenerator(step);
+
+        if (step.getPreviewData() == null || !step.getPreviewData().isObject()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请先生成预览，再进行文字修改");
+        }
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请求不能为空");
+        }
+        resolveEditableTextId(stepId, request);
+        if (request.getTarget() == null || request.getTarget().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "target 不能为空");
+        }
+        if (request.getValue() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "value 不能为空");
+        }
+
+        ObjectNode previewData = step.getPreviewData().deepCopy();
+        applyPreviewTextPatch(previewData, request);
+        normalizeAndValidatePreviewData(step, generator, previewData);
+        stampCompositionMetadata(task, step, previewData);
+        stampPreviewMetadata(step, previewData, "text_patch", describeTextPatch(request));
+        step.setPreviewData(previewData);
+        replacePreviewArtifact(task, step, generator.previewArtifactType(), readPreviewTitle(previewData, generator.previewTitle()), previewData);
+
+        step.setStatus(StepStatus.WAIT_CONFIRM);
+        task.setStatus(TaskStatus.WAIT_CONFIRM);
+        task.setNextAction("confirm:" + step.getStepId());
+        addEvent(task, "STEP_PREVIEW_TEXT_PATCHED", "用户已精确修改预览文字",
+                previewActionMetadata(task, step, generator.previewArtifactType(), request.getSource(), request.getClientId(), describeTextPatch(request)));
+        log.info("工作台精确文字修改完成，taskId={}，stepId={}，target={}，editableTextId={}，revision={}，source={}，clientId={}",
+                taskId, stepId, request.getTarget(), request.getEditableTextId(), previewData.path("revision").asInt(0),
+                request.getSource(), request.getClientId());
+        return save(task);
+    }
+
+    /**
      * 自然语言精修入口。优先调用大模型生成新的结构化预览数据；
      * 大模型不可用或输出无效时，降级为确定性轻量规则修改。
      */
-    public AgentTask refineStepPreview(String taskId, String stepId, RefineStepPreviewRequest request) {
+    public synchronized AgentTask refineStepPreview(String taskId, String stepId, RefineStepPreviewRequest request) {
         AgentTask task = getTask(taskId);
         PlanStep step = task.getPlanSteps().stream()
                 .filter(s -> s.getStepId().equals(stepId))
@@ -332,9 +390,11 @@ public class AgentTaskService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "精修指令不能为空");
         }
 
-        ObjectNode previewData = previewRefinementService
+        Optional<JsonNode> llmRefined = previewRefinementService
                 .refine(step.getPreviewData(), request.getInstruction(), generator.expectedPreviewDataType())
-                .filter(JsonNode::isObject)
+                .filter(JsonNode::isObject);
+        boolean usedLlmRefine = llmRefined.isPresent();
+        ObjectNode previewData = llmRefined
                 .map(refined -> (ObjectNode) refined.deepCopy())
                 .orElseGet(() -> {
                     ObjectNode fallbackPreviewData = step.getPreviewData().deepCopy();
@@ -352,7 +412,325 @@ public class AgentTaskService {
         task.setNextAction("confirm:" + step.getStepId());
         addEvent(task, "STEP_PREVIEW_REFINED", "步骤预览已按自然语言指令精修",
                 previewActionMetadata(task, step, generator.previewArtifactType(), request.getSource(), request.getClientId(), request.getInstruction()));
+        log.info("工作台自然语言精修完成，taskId={}，stepId={}，mode={}，artifactType={}，revision={}，source={}，clientId={}，instruction={}",
+                taskId, stepId, usedLlmRefine ? "llm_patch" : "rule_fallback", generator.expectedPreviewDataType(),
+                previewData.path("revision").asInt(0), request.getSource(), request.getClientId(), request.getInstruction());
         return save(task);
+    }
+
+    private void applyPreviewTextPatch(ObjectNode previewData, PatchPreviewTextRequest request) {
+        String target = request.getTarget().trim();
+        String value = request.getValue();
+        if ("deckTitle".equalsIgnoreCase(target)) {
+            previewData.put("title", value);
+            return;
+        }
+
+        ObjectNode slide = findPreviewSlide(previewData, request);
+        switch (target) {
+            case "title" -> slide.put("title", value);
+            case "bodyMarkdown" -> {
+                slide.put("bodyMarkdown", value);
+                rebuildBlocksFromBodyMarkdown(slide, value);
+                syncSlideDerivedTextFields(slide);
+            }
+            case "speakerNotes" -> slide.put("speakerNotes", value);
+            case "bullet" -> {
+                patchStringArrayItem(slide, "bullets", request.getBulletIndex(), value, "bulletIndex");
+                patchBulletBlockItemByFlatIndex(slide, request.getBulletIndex(), value);
+                syncSlideDerivedTextFields(slide);
+            }
+            case "blockText" -> {
+                findBlock(slide, request).put("text", value);
+                syncSlideDerivedTextFields(slide);
+            }
+            case "blockItem" -> {
+                patchBlockItem(slide, request, value);
+                syncSlideDerivedTextFields(slide);
+            }
+            case "tableCell" -> {
+                patchTableCell(slide, request, value);
+                syncSlideDerivedTextFields(slide);
+            }
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "不支持的 target：" + target + "，可选 deckTitle/title/bodyMarkdown/speakerNotes/bullet/blockText/blockItem/tableCell");
+        }
+    }
+
+    private void resolveEditableTextId(String stepId, PatchPreviewTextRequest request) {
+        String editableTextId = request.getEditableTextId();
+        if (editableTextId == null || editableTextId.isBlank()) {
+            return;
+        }
+        String[] parts = editableTextId.split(":");
+        if (parts.length < 3) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "editableTextId 格式不正确");
+        }
+        if (!parts[0].equals(stepId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "editableTextId 与 stepId 不匹配");
+        }
+        if (!parts[1].startsWith("s")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "editableTextId 缺少页面定位");
+        }
+        int slideIndex = parseEditableIndex(parts[1].substring(1), "slideIndex");
+        String target = parts[2];
+        request.setSlideNo(slideIndex + 1);
+        request.setTarget(target);
+        switch (target) {
+            case "deckTitle", "title", "bodyMarkdown", "speakerNotes" -> {
+            }
+            case "bullet" -> request.setBulletIndex(parsePart(parts, 3, "bulletIndex"));
+            case "blockText" -> request.setBlockIndex(parsePart(parts, 3, "blockIndex"));
+            case "blockItem" -> {
+                request.setBlockIndex(parsePart(parts, 3, "blockIndex"));
+                request.setItemIndex(parsePart(parts, 4, "itemIndex"));
+            }
+            case "tableCell" -> {
+                request.setBlockIndex(parsePart(parts, 3, "blockIndex"));
+                request.setRowIndex(parsePart(parts, 4, "rowIndex"));
+                request.setCellIndex(parsePart(parts, 5, "cellIndex"));
+            }
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "editableTextId 包含不支持的 target：" + target);
+        }
+    }
+
+    private int parsePart(String[] parts, int index, String name) {
+        if (parts.length <= index) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "editableTextId 缺少 " + name);
+        }
+        return parseEditableIndex(parts[index], name);
+    }
+
+    private int parseEditableIndex(String value, String name) {
+        try {
+            int index = Integer.parseInt(value);
+            if (index < 0) {
+                throw new NumberFormatException("negative");
+            }
+            return index;
+        } catch (NumberFormatException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, name + " 必须是非负整数");
+        }
+    }
+
+    private ObjectNode findPreviewSlide(ObjectNode previewData, PatchPreviewTextRequest request) {
+        JsonNode slidesNode = previewData.path("slides");
+        if (!slidesNode.isArray() || slidesNode.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "previewData.slides 为空，无法精确修改页面文字");
+        }
+        if (request.getSlideId() != null && !request.getSlideId().isBlank()) {
+            for (JsonNode node : slidesNode) {
+                if (request.getSlideId().equals(node.path("id").asText("")) && node.isObject()) {
+                    return (ObjectNode) node;
+                }
+            }
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "未找到 slideId=" + request.getSlideId());
+        }
+        int slideNo = request.getSlideNo() == null ? -1 : request.getSlideNo();
+        if (slideNo <= 0 || slideNo > slidesNode.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "slideNo 必须在 1 到 " + slidesNode.size() + " 之间");
+        }
+        JsonNode slide = slidesNode.get(slideNo - 1);
+        if (!slide.isObject()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "目标页面不是 JSON 对象");
+        }
+        return (ObjectNode) slide;
+    }
+
+    private ObjectNode findBlock(ObjectNode slide, PatchPreviewTextRequest request) {
+        JsonNode blocksNode = slide.path("blocks");
+        if (!blocksNode.isArray() || blocksNode.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "目标页面没有 blocks，无法修改结构化文本块");
+        }
+        int blockIndex = request.getBlockIndex() == null ? -1 : request.getBlockIndex();
+        if (blockIndex < 0 || blockIndex >= blocksNode.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "blockIndex 必须在 0 到 " + (blocksNode.size() - 1) + " 之间");
+        }
+        JsonNode block = blocksNode.get(blockIndex);
+        if (!block.isObject()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "目标 block 不是 JSON 对象");
+        }
+        return (ObjectNode) block;
+    }
+
+    private void patchBlockItem(ObjectNode slide, PatchPreviewTextRequest request, String value) {
+        ObjectNode block = findBlock(slide, request);
+        patchStringArrayItem(block, "items", request.getItemIndex(), value, "itemIndex");
+    }
+
+    private void patchTableCell(ObjectNode slide, PatchPreviewTextRequest request, String value) {
+        ObjectNode block = findBlock(slide, request);
+        JsonNode rowsNode = block.path("rows");
+        if (!rowsNode.isArray() || rowsNode.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "目标 block 没有 rows，无法修改表格单元格");
+        }
+        int rowIndex = request.getRowIndex() == null ? -1 : request.getRowIndex();
+        if (rowIndex < 0 || rowIndex >= rowsNode.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "rowIndex 必须在 0 到 " + (rowsNode.size() - 1) + " 之间");
+        }
+        JsonNode rowNode = rowsNode.get(rowIndex);
+        if (!(rowNode instanceof ArrayNode row)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "目标 row 不是 JSON 数组");
+        }
+        int cellIndex = request.getCellIndex() == null ? -1 : request.getCellIndex();
+        if (cellIndex < 0 || cellIndex >= row.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "cellIndex 必须在 0 到 " + (row.size() - 1) + " 之间");
+        }
+        row.set(cellIndex, objectMapper.getNodeFactory().textNode(value));
+    }
+
+    private void patchBulletBlockItemByFlatIndex(ObjectNode slide, Integer bulletIndex, String value) {
+        int targetIndex = bulletIndex == null ? -1 : bulletIndex;
+        if (targetIndex < 0) {
+            return;
+        }
+        JsonNode blocksNode = slide.path("blocks");
+        if (!(blocksNode instanceof ArrayNode blocks)) {
+            return;
+        }
+        int cursor = 0;
+        for (JsonNode blockNode : blocks) {
+            if (!(blockNode instanceof ObjectNode block) || !"bullets".equals(block.path("type").asText(""))) {
+                continue;
+            }
+            JsonNode itemsNode = block.path("items");
+            if (!(itemsNode instanceof ArrayNode items)) {
+                continue;
+            }
+            if (targetIndex < cursor + items.size()) {
+                items.set(targetIndex - cursor, objectMapper.getNodeFactory().textNode(value));
+                return;
+            }
+            cursor += items.size();
+        }
+    }
+
+    private void rebuildBlocksFromBodyMarkdown(ObjectNode slide, String bodyMarkdown) {
+        ArrayNode blocks = objectMapper.createArrayNode();
+        String text = bodyMarkdown == null ? "" : bodyMarkdown.trim();
+        if (text.isBlank()) {
+            slide.set("blocks", blocks);
+            return;
+        }
+        List<String> lines = text.lines()
+                .map(String::trim)
+                .filter(line -> !line.isBlank())
+                .toList();
+        boolean allBullets = !lines.isEmpty() && lines.stream().allMatch(line -> line.startsWith("- ") || line.startsWith("* "));
+        ObjectNode block = blocks.addObject();
+        if (allBullets) {
+            block.put("type", "bullets");
+            ArrayNode items = block.putArray("items");
+            lines.stream()
+                    .map(line -> line.substring(2).trim())
+                    .filter(line -> !line.isBlank())
+                    .forEach(items::add);
+        } else {
+            block.put("type", "paragraph");
+            block.put("text", text);
+        }
+        slide.set("blocks", blocks);
+    }
+
+    private void syncSlideDerivedTextFields(ObjectNode slide) {
+        JsonNode blocksNode = slide.path("blocks");
+        if (!(blocksNode instanceof ArrayNode blocks) || blocks.isEmpty()) {
+            syncBodyMarkdownFromBulletsOnly(slide);
+            return;
+        }
+
+        ArrayNode bullets = objectMapper.createArrayNode();
+        List<String> bodyParts = new java.util.ArrayList<>();
+        for (JsonNode blockNode : blocks) {
+            if (!(blockNode instanceof ObjectNode block)) {
+                continue;
+            }
+            String type = block.path("type").asText("");
+            if ("paragraph".equals(type)) {
+                String text = block.path("text").asText("");
+                if (!text.isBlank()) {
+                    bodyParts.add(text);
+                }
+                continue;
+            }
+            if ("bullets".equals(type)) {
+                JsonNode itemsNode = block.path("items");
+                if (itemsNode instanceof ArrayNode items) {
+                    List<String> bulletLines = new java.util.ArrayList<>();
+                    for (JsonNode item : items) {
+                        String value = item.asText("");
+                        if (!value.isBlank()) {
+                            bullets.add(value);
+                            bulletLines.add("- " + value);
+                        }
+                    }
+                    if (!bulletLines.isEmpty()) {
+                        bodyParts.add(String.join("\n", bulletLines));
+                    }
+                }
+                continue;
+            }
+            if ("table".equals(type)) {
+                JsonNode rowsNode = block.path("rows");
+                if (rowsNode instanceof ArrayNode rows) {
+                    List<String> rowLines = new java.util.ArrayList<>();
+                    for (JsonNode row : rows) {
+                        if (row instanceof ArrayNode cells) {
+                            List<String> values = new java.util.ArrayList<>();
+                            for (JsonNode cell : cells) {
+                                values.add(cell.asText(""));
+                            }
+                            rowLines.add("| " + String.join(" | ", values) + " |");
+                        }
+                    }
+                    if (!rowLines.isEmpty()) {
+                        bodyParts.add(String.join("\n", rowLines));
+                    }
+                }
+            }
+        }
+        slide.set("bullets", bullets);
+        slide.put("bodyMarkdown", String.join("\n", bodyParts));
+    }
+
+    private void syncBodyMarkdownFromBulletsOnly(ObjectNode slide) {
+        JsonNode bulletsNode = slide.path("bullets");
+        if (!(bulletsNode instanceof ArrayNode bullets) || bullets.isEmpty()) {
+            return;
+        }
+        ArrayNode blocks = objectMapper.createArrayNode();
+        ObjectNode block = blocks.addObject();
+        block.put("type", "bullets");
+        ArrayNode items = block.putArray("items");
+        List<String> lines = new java.util.ArrayList<>();
+        for (JsonNode bullet : bullets) {
+            String value = bullet.asText("");
+            items.add(value);
+            if (!value.isBlank()) {
+                lines.add("- " + value);
+            }
+        }
+        slide.set("blocks", blocks);
+        slide.put("bodyMarkdown", String.join("\n", lines));
+    }
+
+    private void patchStringArrayItem(ObjectNode node, String fieldName, Integer index, String value, String indexName) {
+        JsonNode arrayNode = node.path(fieldName);
+        if (!(arrayNode instanceof ArrayNode array) || array.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "目标字段 " + fieldName + " 不是可修改数组");
+        }
+        int resolvedIndex = index == null ? -1 : index;
+        if (resolvedIndex < 0 || resolvedIndex >= array.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, indexName + " 必须在 0 到 " + (array.size() - 1) + " 之间");
+        }
+        array.set(resolvedIndex, objectMapper.getNodeFactory().textNode(value));
+    }
+
+    private String describeTextPatch(PatchPreviewTextRequest request) {
+        String location = request.getSlideId() != null && !request.getSlideId().isBlank()
+                ? "slideId=" + request.getSlideId()
+                : "slideNo=" + request.getSlideNo();
+        return "target=" + request.getTarget() + ", " + location;
     }
 
     private StepPreviewGenerator findPreviewGenerator(PlanStep step) {
@@ -531,7 +909,7 @@ public class AgentTaskService {
      * @param taskId    任务ID
      * @return          执行后的任务实例
      */
-    public AgentTask executeTask(String taskId) {
+    public synchronized AgentTask executeTask(String taskId) {
         AgentTask task = getTask(taskId);
         if (task.getStatus() == TaskStatus.CREATED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "执行任务前必须先生成规划");

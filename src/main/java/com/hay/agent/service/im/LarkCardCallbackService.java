@@ -80,14 +80,13 @@ public class LarkCardCallbackService {
                         return;
                     }
 
-                    larkTaskCardService.updateConfirmCardResolved(chatId, waitingTask, waitingStep, true);
-
                     ConfirmTaskRequest request = new ConfirmTaskRequest();
                     request.setStepId(resolvedStepId);
                     request.setApproved(true);
                     request.setComment("来自飞书确认卡片");
                     request.setSource("lark_card");
                     AgentTask confirmedTask = agentTaskService.confirmStep(taskId, request);
+                    larkTaskCardService.updateConfirmCardResolved(chatId, waitingTask, waitingStep, true);
                     larkTaskCardService.sendFollowUpCardsForCurrentState(chatId, confirmedTask);
 
                     AgentTask advancedTask = agentRunner.runUntilBlocked(taskId);

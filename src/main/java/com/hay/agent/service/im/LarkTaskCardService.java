@@ -389,6 +389,8 @@ public class LarkTaskCardService {
         }
 
         elements.add(markdown("**你的计划已完成**，可以进入工作台查看正式产物。"));
+        elements.add(markdown("**闭环结果**：" + deliveryCoverageSummary(task)));
+        elements.add(markdown("**演示亮点**：自然语言触发、双确认、工作台精修、多端状态同步和正式交付已串成完整 Agent 流程。"));
         List<Artifact> outputs = task.getArtifacts().stream()
                 .filter(artifact -> artifact.getUrl() != null && !artifact.getUrl().startsWith("preview://"))
                 .filter(artifact -> !"delivery".equalsIgnoreCase(artifact.getType()))
@@ -399,6 +401,38 @@ public class LarkTaskCardService {
                 elements.add(markdown("- **" + artifact.getTitle() + "**"));
             }
         }
+    }
+
+    private String deliveryCoverageSummary(AgentTask task) {
+        boolean hasDoc = hasOutputType(task, "doc", "docs", "document")
+                || hasPlannedStep(task, "C_DOC");
+        boolean hasSlides = hasOutputType(task, "slides", "ppt", "presentation")
+                || hasPlannedStep(task, "D_SLIDES");
+        if (hasDoc && hasSlides) {
+            return "已完成 IM 触发、文档沉淀、PPT 生成和飞书链接交付。";
+        }
+        if (hasSlides) {
+            return "已完成 IM 触发、PPT 生成和飞书链接交付。";
+        }
+        if (hasDoc) {
+            return "已完成 IM 触发、文档生成和飞书链接交付。";
+        }
+        return "已完成 IM 触发、Agent 执行和飞书交付。";
+    }
+
+    private boolean hasOutputType(AgentTask task, String... types) {
+        if (task == null || task.getArtifacts() == null) {
+            return false;
+        }
+        return task.getArtifacts().stream()
+                .filter(artifact -> artifact.getUrl() != null && !artifact.getUrl().startsWith("preview://"))
+                .anyMatch(artifact -> containsAnyIgnoreCase(artifact.getType(), types));
+    }
+
+    private boolean hasPlannedStep(AgentTask task, String stepId) {
+        return task != null
+                && task.getPlanSteps() != null
+                && task.getPlanSteps().stream().anyMatch(step -> stepId.equals(step.getStepId()));
     }
 
     private void addPilotGuidance(ArrayNode elements, AgentTask task, PlanStep step) {
@@ -679,6 +713,18 @@ public class LarkTaskCardService {
                 && ("slides".equalsIgnoreCase(artifact.getType())
                 || "ppt".equalsIgnoreCase(artifact.getType())
                 || "presentation".equalsIgnoreCase(artifact.getType()));
+    }
+
+    private boolean containsAnyIgnoreCase(String value, String... candidates) {
+        if (value == null || candidates == null) {
+            return false;
+        }
+        for (String candidate : candidates) {
+            if (candidate != null && value.equalsIgnoreCase(candidate)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isCancelled(AgentTask task) {
